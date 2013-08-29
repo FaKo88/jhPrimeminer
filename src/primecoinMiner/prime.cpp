@@ -6,6 +6,8 @@
 #include <bitset>
 #include <time.h>
 #include <set>
+#include <iostream>
+#include <fstream>
 #include <algorithm>
 
 // Prime Table
@@ -24,7 +26,6 @@ uint64 GetTimeMicros()
    QueryPerformanceCounter(&t);
    return (uint64)t.QuadPart;
 }
-
 
 std::vector<unsigned int> vPrimes;
 unsigned int nSieveExtensions = nDefaultSieveExtensions;
@@ -1442,12 +1443,6 @@ return false; // never reached
 }
 */
 
-static unsigned int int_invert(unsigned int a, unsigned int nPrime)
-{
-   // Extended Euclidean algorithm to calculate the inverse of a in finite field defined by nPrime
-   int rem0 = nPrime, rem1 = a % nPrime, rem2;
-   int aux0 = 0, aux1 = 1, aux2;
-   int quotient, inverse;
 
    while (1)
    {

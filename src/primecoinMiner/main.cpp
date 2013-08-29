@@ -600,9 +600,9 @@ void jhMiner_parseCommandline(int argc, char **argv)
             ExitProcess(0);
          }
          commandlineInput.sieveSize = atoi(argv[cIdx]);
-         if( commandlineInput.sieveSize < 200000 || commandlineInput.sieveSize > 40000000 )
+			if( commandlineInput.sieveSize < 200000 || commandlineInput.sieveSize > 100000000 )
          {
-            printf("-s parameter out of range, must be between 200000 - 10000000");
+				printf("-s parameter out of range, must be between 200000 - 100000000");
             ExitProcess(0);
          }
          cIdx++;
@@ -952,7 +952,7 @@ static void RoundSieveAutoTuningWorkerThread(bool bEnabled)
       // Auto Tuning for nPrimorialMultiplier
       int nSampleSeconds = 15;
 
-      while (true)
+		while ((true) && (1==0))
       {
          primeStats.nWaveTime = 0;
          primeStats.nWaveRound = 0;
@@ -1129,7 +1129,7 @@ static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
       for (int i = 0; i < threadMap.size(); i++)
       {
          DWORD heartBeatTick = threadHearthBeat[i];
-         if (currentTick - heartBeatTick > maxIdelTime)
+				if (1 == 0 && (currentTick - heartBeatTick > maxIdelTime))
          {
             //restart the thread
             printf("Restarting thread %d\n", i);
