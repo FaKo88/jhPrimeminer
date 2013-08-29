@@ -844,7 +844,7 @@ static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPr
 //boost::thread_specific_ptr<CSieveOfEratosthenes> psieve;
 
 // Mine probable prime chain of form: n = h * p# +/- 1
-bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* block, mpz_class& mpzFixedMultiplier, bool& fNewBlock, unsigned int& nTriedMultiplier, unsigned int& nProbableChainLength, 
+bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* block, mpz_class& mpzFixedMultiplier, bool& fNewBlock, unsigned int& nProbableChainLength, 
                             unsigned int& nTests, unsigned int& nPrimesHit, sint32 threadIndex, mpz_class& mpzHash, unsigned int nPrimorialMultiplier)
 {
 
@@ -863,14 +863,16 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
    if (nOverrideTargetValue > 0)
       lSieveTarget = nOverrideTargetValue;
    else
+   {
       lSieveTarget = TargetGetLength(block->nBits);
-   // If Difficulty gets within 1/36th of next target length, its actually more efficent to
-   // increase the target length.. While technically worse for share val/hr - this should
-   // help block rate.
-   // Discussions with jh00 revealed this is non-linear, and graphs show that 0.1 diff is enough
-   // to warrant a switch
-   if (GetChainDifficulty(block->nBits) >= ((lSieveTarget + 1) - 0.1f))
-      lSieveTarget++;
+      // If Difficulty gets within 1/36th of next target length, its actually more efficent to
+      // increase the target length.. While technically worse for share val/hr - this should
+      // help block rate.
+      // Discussions with jh00 revealed this is non-linear, and graphs show that 0.1 diff is enough
+      // to warrant a switch
+      if (GetChainDifficulty(block->nBits) >= ((lSieveTarget + 1) - 0.1f))
+         lSieveTarget++;
+   }
 
    if (nOverrideBTTargetValue > 0)
       lSieveBTTarget = nOverrideBTTargetValue;
@@ -881,17 +883,17 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
    if (*psieve == NULL)
    {
       // Build sieve
-      *psieve = new CSieveOfEratosthenes(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
-      (*psieve)->Weave();
+      *psieve = new CSieveOfEratosthenes(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, mpzHash, mpzFixedMultiplier);
+      //(*psieve)->Weave();
    }
    else
    {
-      (*psieve)->Init(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
-      (*psieve)->Weave();
+      (*psieve)->Init(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, mpzHash, mpzFixedMultiplier);
+      //(*psieve)->Weave();
    }
 
-   primeStats.nSieveRounds++;
-   primeStats.nCandidateCount += (*psieve)->GetCandidateCount();
+   //primeStats.nSieveRounds++;
+   //primeStats.nCandidateCount += (*psieve)->GetCandidateCount();
 
    mpz_class mpzHashMultiplier = mpzHash * mpzFixedMultiplier;
    mpz_class mpzChainOrigin;
@@ -907,6 +909,9 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
    // References to test parameters
    unsigned int& nChainLength = testParams.nChainLength;
    unsigned int& nCandidateType = testParams.nCandidateType;
+
+   unsigned int nTriedMultiplier = 0;
+   unsigned int nLayerMultiplier = 0;
 
    //nStart = GetTickCount();
    //nCurrent = nStart;
@@ -926,13 +931,13 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
    while (block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    {
       nTests++;
-      if (!(*psieve)->GetNextCandidateMultiplier(nTriedMultiplier, nCandidateType))
+      if (!(*psieve)->GetNextCandidateMultiplier(nTriedMultiplier, nLayerMultiplier, nCandidateType))
       {			
          if (!sieveRescan && bFullScan)
          {
             //fast rescan for more shares.
-            (*psieve)->SetSievePercentage(100); //100%
-            (*psieve)->Weave();
+            //(*psieve)->SetSievePercentage(100); //100%
+            //(*psieve)->Weave();
             sieveRescan = true;
             continue;
          }
@@ -945,7 +950,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          }
       }
 
-      mpzChainOrigin = mpzHash * mpzFixedMultiplier * nTriedMultiplier;		
+      mpzChainOrigin = mpzHash * mpzFixedMultiplier * nTriedMultiplier * nLayerMultiplier;		
       nChainLength = 0;		
       ProbablePrimeChainTestFast(mpzChainOrigin, testParams);
       nProbableChainLength = nChainLength;
@@ -953,7 +958,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 
       primeStats.primeChainsFound++;
 
-      if( nProbableChainLength >= 0x06000000 )
+      if( nProbableChainLength >= 0x03000000 )
       {
          shareDifficultyMajor = (sint32)(nChainLength>>24);
       }
@@ -984,7 +989,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 
       if(nProbableChainLength >= block->serverData.nBitsForShare)
       {
-         block->mpzPrimeChainMultiplier = mpzFixedMultiplier * nTriedMultiplier;
+         block->mpzPrimeChainMultiplier = mpzFixedMultiplier * nTriedMultiplier * nLayerMultiplier;
 
          if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
             continue;
@@ -1442,76 +1447,76 @@ mpz_clear(mpzTwoInverse);
 return false; // never reached
 }
 */
+/*
 
+while (1)
+{
+if (rem1 <= 1)
+{
+inverse = aux1;
+break;
+}
 
-   while (1)
-   {
-      if (rem1 <= 1)
-      {
-         inverse = aux1;
-         break;
-      }
+rem2 = rem0 % rem1;
+quotient = rem0 / rem1;
+aux2 = -quotient * aux1 + aux0;
 
-      rem2 = rem0 % rem1;
-      quotient = rem0 / rem1;
-      aux2 = -quotient * aux1 + aux0;
+if (rem2 <= 1)
+{
+inverse = aux2;
+break;
+}
 
-      if (rem2 <= 1)
-      {
-         inverse = aux2;
-         break;
-      }
+rem0 = rem1 % rem2;
+quotient = rem1 / rem2;
+aux0 = -quotient * aux2 + aux1;
 
-      rem0 = rem1 % rem2;
-      quotient = rem1 / rem2;
-      aux0 = -quotient * aux2 + aux1;
+if (rem0 <= 1)
+{
+inverse = aux0;
+break;
+}
 
-      if (rem0 <= 1)
-      {
-         inverse = aux0;
-         break;
-      }
+rem1 = rem2 % rem0;
+quotient = rem2 / rem0;
+aux1 = -quotient * aux0 + aux2;
+}
 
-      rem1 = rem2 % rem0;
-      quotient = rem2 / rem0;
-      aux1 = -quotient * aux0 + aux2;
-   }
-
-   return (inverse + nPrime) % nPrime;
+return (inverse + nPrime) % nPrime;
 }
 
 
 
 void CSieveOfEratosthenes::ProcessMultiplier(sieve_word_t *vfComposites, const unsigned int nMinMultiplier, const unsigned int nMaxMultiplier, const std::vector<unsigned int>& vPrimes, unsigned int *vMultipliers, unsigned int nLayerSeq)
 {
-   // Wipe the part of the array first
-   if (nMinMultiplier < nMaxMultiplier)
-      memset(vfComposites + GetWordNum(nMinMultiplier), 0, (nMaxMultiplier - nMinMultiplier + nWordBits - 1) / nWordBits * sizeof(sieve_word_t));
+// Wipe the part of the array first
+if (nMinMultiplier < nMaxMultiplier)
+memset(vfComposites + GetWordNum(nMinMultiplier), 0, (nMaxMultiplier - nMinMultiplier + nWordBits - 1) / nWordBits * sizeof(sieve_word_t));
 
-   for (unsigned int nPrimeSeqLocal = nMinPrimeSeq; nPrimeSeqLocal < nPrimes; nPrimeSeqLocal++)
-   {
-      const unsigned int nPrime = vPrimes[nPrimeSeqLocal];
-      const unsigned int nMultiplierPos = nPrimeSeqLocal * nSieveLayers + nLayerSeq;
-      unsigned int nVariableMultiplier = vMultipliers[nMultiplierPos];
-      if (nVariableMultiplier < nMinMultiplier)
-         nVariableMultiplier += (nMinMultiplier - nVariableMultiplier + nPrime - 1) / nPrime * nPrime;
+for (unsigned int nPrimeSeqLocal = nMinPrimeSeq; nPrimeSeqLocal < nPrimes; nPrimeSeqLocal++)
+{
+const unsigned int nPrime = vPrimes[nPrimeSeqLocal];
+const unsigned int nMultiplierPos = nPrimeSeqLocal * nSieveLayers + nLayerSeq;
+unsigned int nVariableMultiplier = vMultipliers[nMultiplierPos];
+if (nVariableMultiplier < nMinMultiplier)
+nVariableMultiplier += (nMinMultiplier - nVariableMultiplier + nPrime - 1) / nPrime * nPrime;
 #ifdef USE_ROTATE
-      const unsigned int nRotateBits = nPrime % nWordBits;
-      sieve_word_t lBitMask = GetBitMask(nVariableMultiplier);
-      for (; nVariableMultiplier < nMaxMultiplier; nVariableMultiplier += nPrime)
-      {
-         vfComposites[GetWordNum(nVariableMultiplier)] |= lBitMask;
-         lBitMask = (lBitMask << nRotateBits) | (lBitMask >> (nWordBits - nRotateBits));
-      }
-      vMultipliers[nMultiplierPos] = nVariableMultiplier;
+const unsigned int nRotateBits = nPrime % nWordBits;
+sieve_word_t lBitMask = GetBitMask(nVariableMultiplier);
+for (; nVariableMultiplier < nMaxMultiplier; nVariableMultiplier += nPrime)
+{
+vfComposites[GetWordNum(nVariableMultiplier)] |= lBitMask;
+lBitMask = (lBitMask << nRotateBits) | (lBitMask >> (nWordBits - nRotateBits));
+}
+vMultipliers[nMultiplierPos] = nVariableMultiplier;
 #else
-      for (; nVariableMultiplier < nMaxMultiplier; nVariableMultiplier += nPrime)
-      {
-         vfComposites[GetWordNum(nVariableMultiplier)] |= GetBitMask(nVariableMultiplier);
-      }
-      vMultipliers[nMultiplierPos] = nVariableMultiplier;
+for (; nVariableMultiplier < nMaxMultiplier; nVariableMultiplier += nPrime)
+{
+vfComposites[GetWordNum(nVariableMultiplier)] |= GetBitMask(nVariableMultiplier);
+}
+vMultipliers[nMultiplierPos] = nVariableMultiplier;
 #endif
-   }
+}
 }
 
 
@@ -1521,243 +1526,244 @@ void CSieveOfEratosthenes::ProcessMultiplier(sieve_word_t *vfComposites, const u
 //   False - sieve already completed
 bool CSieveOfEratosthenes::Weave()
 {
-   // Faster GMP version
-   uint32 start = GetTickCount(); 
-   // Keep all variables local for max performance
-   const unsigned int nChainLength = this->nChainLength;
-   const unsigned int nBTChainLength = this->nBTChainLength;
-   //    CBlockIndex* pindexPrev = this->pindexPrev;
-   const unsigned int nSieveSize = this->nSieveSize;
-   //const unsigned int nTotalPrimes = vPrimesSize;
-   //const unsigned int nTotalPrimesLessOne = nTotalPrimes-1;
-   mpz_class mpzHash = this->mpzHash;
-   mpz_class mpzFixedMultiplier = this->mpzFixedMultiplier;
+// Faster GMP version
+uint32 start = GetTickCount(); 
+// Keep all variables local for max performance
+const unsigned int nChainLength = this->nChainLength;
+const unsigned int nBTChainLength = this->nBTChainLength;
+//    CBlockIndex* pindexPrev = this->pindexPrev;
+const unsigned int nSieveSize = this->nSieveSize;
+//const unsigned int nTotalPrimes = vPrimesSize;
+//const unsigned int nTotalPrimesLessOne = nTotalPrimes-1;
+mpz_class mpzHash = this->mpzHash;
+mpz_class mpzFixedMultiplier = this->mpzFixedMultiplier;
 
-   // Process only a set percentage of the primes
-   // Most composites are still found
-   const unsigned int nPrimes = this->nPrimes;
-   sieve_word_t *vfCandidates = this->vfCandidates;
+// Process only a set percentage of the primes
+// Most composites are still found
+const unsigned int nPrimes = this->nPrimes;
+sieve_word_t *vfCandidates = this->vfCandidates;
 
-   // Check whether fixed multiplier fits in an unsigned long
-   //bool fUseLongForFixedMultiplier = mpzFixedMultiplier < ULONG_MAX;
-   bool fUseLongForFixedMultiplier = false;
-   unsigned long nFixedMultiplier;
-   mpz_class mpzFixedFactor;
-   if (fUseLongForFixedMultiplier)
-      nFixedMultiplier = mpzFixedMultiplier.get_ui();
-   else
-      mpzFixedFactor = mpzHash * mpzFixedMultiplier;
+// Check whether fixed multiplier fits in an unsigned long
+//bool fUseLongForFixedMultiplier = mpzFixedMultiplier < ULONG_MAX;
+bool fUseLongForFixedMultiplier = false;
+unsigned long nFixedMultiplier;
+mpz_class mpzFixedFactor;
+if (fUseLongForFixedMultiplier)
+nFixedMultiplier = mpzFixedMultiplier.get_ui();
+else
+mpzFixedFactor = mpzHash * mpzFixedMultiplier;
 
-   unsigned int nCombinedEndSeq = this->nPrimeSeq;
-   unsigned int nFixedFactorCombinedMod = 0;
+unsigned int nCombinedEndSeq = this->nPrimeSeq;
+unsigned int nFixedFactorCombinedMod = 0;
 
-   for (unsigned int nPrimeSeqLocal = this->nPrimeSeq; nPrimeSeqLocal < nPrimes; nPrimeSeqLocal++)
-   {
-      // TODO: on new block stop
-      //if (pindexPrev != pindexBest)
-      //    break;  // new block
-      unsigned int nPrime = vPrimes[nPrimeSeqLocal];
-      if (nPrimeSeqLocal >= nCombinedEndSeq)
-      {
-         // Combine multiple primes to produce a big divisor
-         unsigned int nPrimeCombined = 1;
-         while (nPrimeCombined < UINT_MAX / vPrimes[nCombinedEndSeq]) // Not likely to occur// && nCombinedEndSeq < nTotalPrimesLessOne )
-         {
-            nPrimeCombined *= vPrimes[nCombinedEndSeq];
-            nCombinedEndSeq++;
-         }
-
-         if (fUseLongForFixedMultiplier)
-         {
-            nFixedFactorCombinedMod = mpz_tdiv_ui(mpzHash.get_mpz_t(), nPrimeCombined);
-            nFixedFactorCombinedMod = (uint64)nFixedFactorCombinedMod * (nFixedMultiplier % nPrimeCombined) % nPrimeCombined;
-         }
-         else
-            nFixedFactorCombinedMod = mpz_tdiv_ui(mpzFixedFactor.get_mpz_t(), nPrimeCombined);
-      }
-
-      unsigned int nFixedFactorMod = nFixedFactorCombinedMod % nPrime;
-      if (nFixedFactorMod == 0)
-      {
-         // Nothing in the sieve is divisible by this prime
-         continue;
-      }
-      // Find the modulo inverse of fixed factor
-      unsigned int nFixedInverse = int_invert(nFixedFactorMod, nPrime);
-      if (!nFixedInverse)
-         return error("CSieveOfEratosthenes::Weave(): int_invert of fixed factor failed for prime #%u=%u", nPrimeSeqLocal, vPrimes[nPrimeSeqLocal]);
-      unsigned int nTwoInverse = (nPrime + 1) / 2;
-
-      // Check whether 32-bit arithmetic can be used for nFixedInverse
-      const bool fUse32BArithmetic = (UINT_MAX / nTwoInverse) >= nPrime;
-      unsigned int multiplierPos = nPrimeSeqLocal * nSieveLayers;
-      if (fUse32BArithmetic)
-      {
-         // Weave the sieve for the prime
-         for (unsigned int nChainSeq = 0; nChainSeq < nSieveLayers; nChainSeq++)
-         {
-            // Find the first number that's divisible by this prime
-            vCunningham1Multipliers[multiplierPos] = nFixedInverse;
-            vCunningham2Multipliers[multiplierPos] = nPrime - nFixedInverse;
-
-            // For next number in chain
-            nFixedInverse = nFixedInverse * nTwoInverse % nPrime;
-
-            // Increment Multiplier Positon.
-            multiplierPos++;
-         }
-      }
-      else
-      {
-         // Weave the sieve for the prime
-         for (unsigned int nChainSeq = 0; nChainSeq < nSieveLayers; nChainSeq++)
-         {
-            // Find the first number that's divisible by this prime
-            vCunningham1Multipliers[multiplierPos] = nFixedInverse;
-            vCunningham2Multipliers[multiplierPos] = nPrime - nFixedInverse;
-
-            // For next number in chain
-            nFixedInverse = (uint64)nFixedInverse * nTwoInverse % nPrime;
-
-            // Increment Multiplier Positon.
-            multiplierPos++;
-         }
-      }
-   }
-
-   // Number of elements that are likely to fit in L1 cache
-   // NOTE: This needs to be a multiple of nWordBits
-   const unsigned int nL1CacheElements = primeStats.nL1CacheElements;
-   const unsigned int nArrayRounds = (nSieveSize + nL1CacheElements - 1) / nL1CacheElements;
-
-   // Calculate the number of CC1 and CC2 layers needed for BiTwin candidates
-   const unsigned int nBiTwinCC1Layers = (nBTChainLength + 1) / 2;
-   const unsigned int nBiTwinCC2Layers = nBTChainLength / 2;
-
-   // Only 50% of the array is used in extensions
-   const unsigned int nExtensionsMinMultiplier = nSieveSize / 2;
-   const unsigned int nExtensionsMinWord = nExtensionsMinMultiplier / nWordBits;
-
-   // Loop over each array one at a time for optimal L1 cache performance
-   for (unsigned int j = 0; j < nArrayRounds; j++)
-   {
-      const unsigned int nMinMultiplier = nL1CacheElements * j;
-      const unsigned int nMaxMultiplier = min(nL1CacheElements * (j + 1), nSieveSize);
-      const unsigned int nExtMinMultiplier = max(nMinMultiplier, nExtensionsMinMultiplier);
-      const unsigned int nMinWord = nMinMultiplier / nWordBits;
-      const unsigned int nMaxWord = (nMaxMultiplier + nWordBits - 1) / nWordBits;
-      const unsigned int nExtMinWord = max(nMinWord, nExtensionsMinWord);
-
-      //if (pindexPrev != pindexBest)
-      //    break;  // new block
-
-      // Loop over the layers
-      for (unsigned int nLayerSeq = 0; nLayerSeq < nSieveLayers; nLayerSeq++) {
-         //if (pindexPrev != pindexBest)
-         //    break;  // new block
-         if (nLayerSeq < nChainLength)
-         {
-            ProcessMultiplier(vfCompositeLayerCC1, nMinMultiplier, nMaxMultiplier, vPrimes, vCunningham1Multipliers, nLayerSeq);
-            ProcessMultiplier(vfCompositeLayerCC2, nMinMultiplier, nMaxMultiplier, vPrimes, vCunningham2Multipliers, nLayerSeq);
-         }
-         else
-         {
-            // Optimize: First halves of the arrays are not needed in the extensions
-            ProcessMultiplier(vfCompositeLayerCC1, nExtMinMultiplier, nMaxMultiplier, vPrimes, vCunningham1Multipliers, nLayerSeq);
-            ProcessMultiplier(vfCompositeLayerCC2, nExtMinMultiplier, nMaxMultiplier, vPrimes, vCunningham2Multipliers, nLayerSeq);
-         }
-
-         // Apply the layer to the primary sieve arrays
-         if (nLayerSeq < nChainLength)
-         {
-            if (nLayerSeq < nBiTwinCC1Layers && nLayerSeq < nBiTwinCC2Layers)
-            {
-               for (unsigned int nWord = nMinWord; nWord < nMaxWord; nWord++)
-               {
-                  vfCompositeCunningham1[nWord] |= vfCompositeLayerCC1[nWord];
-                  vfCompositeCunningham2[nWord] |= vfCompositeLayerCC2[nWord];
-                  vfCompositeBiTwin[nWord] |= vfCompositeLayerCC1[nWord] | vfCompositeLayerCC2[nWord];
-               }
-            }
-            else if (nLayerSeq < nBiTwinCC2Layers)
-            {
-               for (unsigned int nWord = nMinWord; nWord < nMaxWord; nWord++)
-               {
-                  vfCompositeCunningham1[nWord] |= vfCompositeLayerCC1[nWord];
-                  vfCompositeCunningham2[nWord] |= vfCompositeLayerCC2[nWord];
-                  vfCompositeBiTwin[nWord] |= vfCompositeLayerCC1[nWord];
-               }
-            }
-            else
-            {
-               for (unsigned int nWord = nMinWord; nWord < nMaxWord; nWord++)
-               {
-                  vfCompositeCunningham1[nWord] |= vfCompositeLayerCC1[nWord];
-                  vfCompositeCunningham2[nWord] |= vfCompositeLayerCC2[nWord];
-               }
-            }
-         }
-
-         // Apply the layer to extensions
-         for (unsigned int nExtensionSeq = 0; nExtensionSeq < nSieveExtensions; nExtensionSeq++)
-         {
-            const unsigned int nLayerOffset = nExtensionSeq + 1;
-            if (nLayerSeq >= nLayerOffset && nLayerSeq < nChainLength + nLayerOffset)
-            {
-               const unsigned int nLayerExtendedSeq = nLayerSeq - nLayerOffset;
-               sieve_word_t *vfExtCC1 = vfExtendedCompositeCunningham1 + nExtensionSeq * nCandidatesWords;
-               sieve_word_t *vfExtCC2 = vfExtendedCompositeCunningham2 + nExtensionSeq * nCandidatesWords;
-               sieve_word_t *vfExtTWN = vfExtendedCompositeBiTwin + nExtensionSeq * nCandidatesWords;
-               if (nLayerExtendedSeq < nBiTwinCC1Layers && nLayerExtendedSeq < nBiTwinCC2Layers)
-               {
-                  for (unsigned int nWord = nExtMinWord; nWord < nMaxWord; nWord++)
-                  {
-                     vfExtCC1[nWord] |= vfCompositeLayerCC1[nWord];
-                     vfExtCC2[nWord] |= vfCompositeLayerCC2[nWord];
-                     vfExtTWN[nWord] |= vfCompositeLayerCC1[nWord] | vfCompositeLayerCC2[nWord];
-                  }
-               }
-               else if (nLayerExtendedSeq < nBiTwinCC2Layers)
-               {
-                  for (unsigned int nWord = nExtMinWord; nWord < nMaxWord; nWord++)
-                  {
-                     vfExtCC1[nWord] |= vfCompositeLayerCC1[nWord];
-                     vfExtCC2[nWord] |= vfCompositeLayerCC2[nWord];
-                     vfExtTWN[nWord] |= vfCompositeLayerCC1[nWord];
-                  }
-               }
-               else
-               {
-                  for (unsigned int nWord = nExtMinWord; nWord < nMaxWord; nWord++)
-                  {
-                     vfExtCC1[nWord] |= vfCompositeLayerCC1[nWord];
-                     vfExtCC2[nWord] |= vfCompositeLayerCC2[nWord];
-                  }
-               }
-            }
-         }
-      }
-
-      // Combine the bitsets
-      // vfCandidates = ~(vfCompositeCunningham1 & vfCompositeCunningham2 & vfCompositeBiTwin)
-      for (unsigned int i = nMinWord; i < nMaxWord; i++)
-         vfCandidates[i] = ~(vfCompositeCunningham1[i] & vfCompositeCunningham2[i] & vfCompositeBiTwin[i]);
-
-      // Combine the extended bitsets
-      for (unsigned int j = 0; j < nSieveExtensions; j++)
-         for (unsigned int i = nExtMinWord; i < nMaxWord; i++)
-            vfExtendedCandidates[j * nCandidatesWords + i] = ~(
-            vfExtendedCompositeCunningham1[j * nCandidatesWords + i] &
-            vfExtendedCompositeCunningham2[j * nCandidatesWords + i] &
-            vfExtendedCompositeBiTwin[j * nCandidatesWords + i]);
-   }
-
-   // The sieve has been partially weaved
-   this->nPrimeSeq = nPrimes - 1;
-
-   uint32 end = GetTickCount(); 
-   primeStats.nWaveTime += end-start;
-   primeStats.nWaveRound ++;
-   return false;
+for (unsigned int nPrimeSeqLocal = this->nPrimeSeq; nPrimeSeqLocal < nPrimes; nPrimeSeqLocal++)
+{
+// TODO: on new block stop
+//if (pindexPrev != pindexBest)
+//    break;  // new block
+unsigned int nPrime = vPrimes[nPrimeSeqLocal];
+if (nPrimeSeqLocal >= nCombinedEndSeq)
+{
+// Combine multiple primes to produce a big divisor
+unsigned int nPrimeCombined = 1;
+while (nPrimeCombined < UINT_MAX / vPrimes[nCombinedEndSeq]) // Not likely to occur// && nCombinedEndSeq < nTotalPrimesLessOne )
+{
+nPrimeCombined *= vPrimes[nCombinedEndSeq];
+nCombinedEndSeq++;
 }
 
+if (fUseLongForFixedMultiplier)
+{
+nFixedFactorCombinedMod = mpz_tdiv_ui(mpzHash.get_mpz_t(), nPrimeCombined);
+nFixedFactorCombinedMod = (uint64)nFixedFactorCombinedMod * (nFixedMultiplier % nPrimeCombined) % nPrimeCombined;
+}
+else
+nFixedFactorCombinedMod = mpz_tdiv_ui(mpzFixedFactor.get_mpz_t(), nPrimeCombined);
+}
+
+unsigned int nFixedFactorMod = nFixedFactorCombinedMod % nPrime;
+if (nFixedFactorMod == 0)
+{
+// Nothing in the sieve is divisible by this prime
+continue;
+}
+// Find the modulo inverse of fixed factor
+unsigned int nFixedInverse = int_invert(nFixedFactorMod, nPrime);
+if (!nFixedInverse)
+return error("CSieveOfEratosthenes::Weave(): int_invert of fixed factor failed for prime #%u=%u", nPrimeSeqLocal, vPrimes[nPrimeSeqLocal]);
+unsigned int nTwoInverse = (nPrime + 1) / 2;
+
+// Check whether 32-bit arithmetic can be used for nFixedInverse
+const bool fUse32BArithmetic = (UINT_MAX / nTwoInverse) >= nPrime;
+unsigned int multiplierPos = nPrimeSeqLocal * nSieveLayers;
+if (fUse32BArithmetic)
+{
+// Weave the sieve for the prime
+for (unsigned int nChainSeq = 0; nChainSeq < nSieveLayers; nChainSeq++)
+{
+// Find the first number that's divisible by this prime
+vCunningham1Multipliers[multiplierPos] = nFixedInverse;
+vCunningham2Multipliers[multiplierPos] = nPrime - nFixedInverse;
+
+// For next number in chain
+nFixedInverse = nFixedInverse * nTwoInverse % nPrime;
+
+// Increment Multiplier Positon.
+multiplierPos++;
+}
+}
+else
+{
+// Weave the sieve for the prime
+for (unsigned int nChainSeq = 0; nChainSeq < nSieveLayers; nChainSeq++)
+{
+// Find the first number that's divisible by this prime
+vCunningham1Multipliers[multiplierPos] = nFixedInverse;
+vCunningham2Multipliers[multiplierPos] = nPrime - nFixedInverse;
+
+// For next number in chain
+nFixedInverse = (uint64)nFixedInverse * nTwoInverse % nPrime;
+
+// Increment Multiplier Positon.
+multiplierPos++;
+}
+}
+}
+
+// Number of elements that are likely to fit in L1 cache
+// NOTE: This needs to be a multiple of nWordBits
+const unsigned int nL1CacheElements = primeStats.nL1CacheElements;
+const unsigned int nArrayRounds = (nSieveSize + nL1CacheElements - 1) / nL1CacheElements;
+
+// Calculate the number of CC1 and CC2 layers needed for BiTwin candidates
+const unsigned int nBiTwinCC1Layers = (nBTChainLength + 1) / 2;
+const unsigned int nBiTwinCC2Layers = nBTChainLength / 2;
+
+// Only 50% of the array is used in extensions
+const unsigned int nExtensionsMinMultiplier = nSieveSize / 2;
+const unsigned int nExtensionsMinWord = nExtensionsMinMultiplier / nWordBits;
+
+// Loop over each array one at a time for optimal L1 cache performance
+for (unsigned int j = 0; j < nArrayRounds; j++)
+{
+const unsigned int nMinMultiplier = nL1CacheElements * j;
+const unsigned int nMaxMultiplier = min(nL1CacheElements * (j + 1), nSieveSize);
+const unsigned int nExtMinMultiplier = max(nMinMultiplier, nExtensionsMinMultiplier);
+const unsigned int nMinWord = nMinMultiplier / nWordBits;
+const unsigned int nMaxWord = (nMaxMultiplier + nWordBits - 1) / nWordBits;
+const unsigned int nExtMinWord = max(nMinWord, nExtensionsMinWord);
+
+//if (pindexPrev != pindexBest)
+//    break;  // new block
+
+// Loop over the layers
+for (unsigned int nLayerSeq = 0; nLayerSeq < nSieveLayers; nLayerSeq++) {
+//if (pindexPrev != pindexBest)
+//    break;  // new block
+if (nLayerSeq < nChainLength)
+{
+ProcessMultiplier(vfCompositeLayerCC1, nMinMultiplier, nMaxMultiplier, vPrimes, vCunningham1Multipliers, nLayerSeq);
+ProcessMultiplier(vfCompositeLayerCC2, nMinMultiplier, nMaxMultiplier, vPrimes, vCunningham2Multipliers, nLayerSeq);
+}
+else
+{
+// Optimize: First halves of the arrays are not needed in the extensions
+ProcessMultiplier(vfCompositeLayerCC1, nExtMinMultiplier, nMaxMultiplier, vPrimes, vCunningham1Multipliers, nLayerSeq);
+ProcessMultiplier(vfCompositeLayerCC2, nExtMinMultiplier, nMaxMultiplier, vPrimes, vCunningham2Multipliers, nLayerSeq);
+}
+
+// Apply the layer to the primary sieve arrays
+if (nLayerSeq < nChainLength)
+{
+if (nLayerSeq < nBiTwinCC1Layers && nLayerSeq < nBiTwinCC2Layers)
+{
+for (unsigned int nWord = nMinWord; nWord < nMaxWord; nWord++)
+{
+vfCompositeCunningham1[nWord] |= vfCompositeLayerCC1[nWord];
+vfCompositeCunningham2[nWord] |= vfCompositeLayerCC2[nWord];
+vfCompositeBiTwin[nWord] |= vfCompositeLayerCC1[nWord] | vfCompositeLayerCC2[nWord];
+}
+}
+else if (nLayerSeq < nBiTwinCC2Layers)
+{
+for (unsigned int nWord = nMinWord; nWord < nMaxWord; nWord++)
+{
+vfCompositeCunningham1[nWord] |= vfCompositeLayerCC1[nWord];
+vfCompositeCunningham2[nWord] |= vfCompositeLayerCC2[nWord];
+vfCompositeBiTwin[nWord] |= vfCompositeLayerCC1[nWord];
+}
+}
+else
+{
+for (unsigned int nWord = nMinWord; nWord < nMaxWord; nWord++)
+{
+vfCompositeCunningham1[nWord] |= vfCompositeLayerCC1[nWord];
+vfCompositeCunningham2[nWord] |= vfCompositeLayerCC2[nWord];
+}
+}
+}
+
+// Apply the layer to extensions
+for (unsigned int nExtensionSeq = 0; nExtensionSeq < nSieveExtensions; nExtensionSeq++)
+{
+const unsigned int nLayerOffset = nExtensionSeq + 1;
+if (nLayerSeq >= nLayerOffset && nLayerSeq < nChainLength + nLayerOffset)
+{
+const unsigned int nLayerExtendedSeq = nLayerSeq - nLayerOffset;
+sieve_word_t *vfExtCC1 = vfExtendedCompositeCunningham1 + nExtensionSeq * nCandidatesWords;
+sieve_word_t *vfExtCC2 = vfExtendedCompositeCunningham2 + nExtensionSeq * nCandidatesWords;
+sieve_word_t *vfExtTWN = vfExtendedCompositeBiTwin + nExtensionSeq * nCandidatesWords;
+if (nLayerExtendedSeq < nBiTwinCC1Layers && nLayerExtendedSeq < nBiTwinCC2Layers)
+{
+for (unsigned int nWord = nExtMinWord; nWord < nMaxWord; nWord++)
+{
+vfExtCC1[nWord] |= vfCompositeLayerCC1[nWord];
+vfExtCC2[nWord] |= vfCompositeLayerCC2[nWord];
+vfExtTWN[nWord] |= vfCompositeLayerCC1[nWord] | vfCompositeLayerCC2[nWord];
+}
+}
+else if (nLayerExtendedSeq < nBiTwinCC2Layers)
+{
+for (unsigned int nWord = nExtMinWord; nWord < nMaxWord; nWord++)
+{
+vfExtCC1[nWord] |= vfCompositeLayerCC1[nWord];
+vfExtCC2[nWord] |= vfCompositeLayerCC2[nWord];
+vfExtTWN[nWord] |= vfCompositeLayerCC1[nWord];
+}
+}
+else
+{
+for (unsigned int nWord = nExtMinWord; nWord < nMaxWord; nWord++)
+{
+vfExtCC1[nWord] |= vfCompositeLayerCC1[nWord];
+vfExtCC2[nWord] |= vfCompositeLayerCC2[nWord];
+}
+}
+}
+}
+}
+
+// Combine the bitsets
+// vfCandidates = ~(vfCompositeCunningham1 & vfCompositeCunningham2 & vfCompositeBiTwin)
+for (unsigned int i = nMinWord; i < nMaxWord; i++)
+vfCandidates[i] = ~(vfCompositeCunningham1[i] & vfCompositeCunningham2[i] & vfCompositeBiTwin[i]);
+
+// Combine the extended bitsets
+for (unsigned int j = 0; j < nSieveExtensions; j++)
+for (unsigned int i = nExtMinWord; i < nMaxWord; i++)
+vfExtendedCandidates[j * nCandidatesWords + i] = ~(
+vfExtendedCompositeCunningham1[j * nCandidatesWords + i] &
+vfExtendedCompositeCunningham2[j * nCandidatesWords + i] &
+vfExtendedCompositeBiTwin[j * nCandidatesWords + i]);
+}
+
+// The sieve has been partially weaved
+this->nPrimeSeq = nPrimes - 1;
+
+uint32 end = GetTickCount(); 
+primeStats.nWaveTime += end-start;
+primeStats.nWaveRound ++;
+return false;
+}
+
+*/

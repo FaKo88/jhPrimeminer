@@ -22,8 +22,10 @@ class CSieveOfEratosthenes
 {
    static const unsigned int nWordBits = 8 * sizeof(sieve_word_t);	
    static const int nMinPrimeSeq = 4; // this is Prime number 11, the first prime with unknown factor status.
+   static const int nMaxWeaveMultiplier = 8; // This is the 9th prime (23) which will be the maximum number of individual weaves.
    unsigned int nSieveSize; // size of the sieve
    unsigned int nSievePercentage;
+   unsigned int nSieveExtension;
    unsigned int nChainLength;
    unsigned int nBTCC1ChainLength;
    unsigned int nBTCC2ChainLength;
@@ -31,7 +33,7 @@ class CSieveOfEratosthenes
    unsigned int nPrimes;
    unsigned int nNumMultiplierRounds;
    unsigned int nCurrentMultiplierRoundPos;
-   unsigned int nMaxMultiplierRoundPos;
+   unsigned int nCurrentWeaveMultiplier;
 
    mpz_class mpzHash; // hash of the block header
    mpz_class mpzFixedMultiplier; // fixed round multiplier
@@ -108,14 +110,14 @@ class CSieveOfEratosthenes
 */
 public:
 
-   CSieveOfEratosthenes(unsigned int sieveSize, unsigned int sievePercentage, unsigned int targetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
+   CSieveOfEratosthenes(unsigned int sieveSize, unsigned int sievePercentage, unsigned int nSieveExtension, unsigned int targetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
    {
-      Init(sieveSize, sievePercentage, targetChainLength, mpzHash, mpzFixedMultiplier);
+      Init(sieveSize, sievePercentage, nSieveExtension, targetChainLength, mpzHash, mpzFixedMultiplier);
    }
 
    ~CSieveOfEratosthenes(void);
 
-   void Init(unsigned int nSieveSize, unsigned int nSievePercentage, unsigned int nTargetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier);
+   void Init(unsigned int nSieveSize, unsigned int nSievePercentage, unsigned int nSieveExtension, unsigned int nTargetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier);
 
    void AddMultiplier(const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier);
 
@@ -125,7 +127,7 @@ public:
 
    void UpdateCandidateValues();
 
-   bool GetNextCandidateMultiplier(unsigned int& nVariableMultiplier, unsigned int& nCandidateType);
+   bool GetNextCandidateMultiplier(unsigned int& nVariableMultiplier, unsigned int& nLayerMultiplier, unsigned int& nCandidateType);
 
 //
 //   // Get total number of candidates for power test

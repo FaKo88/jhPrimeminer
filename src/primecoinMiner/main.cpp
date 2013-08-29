@@ -407,6 +407,7 @@ uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex)
 */
 int jhMiner_workerThread_getwork(int threadIndex)
 {
+	CSieveOfEratosthenes* psieve = NULL;
    while( true )
    {
       uint8 localBlockData[128];
@@ -434,9 +435,14 @@ int jhMiner_workerThread_getwork(int threadIndex)
       // ypool uses a special encrypted serverData value to speedup identification of merkleroot and share data
       memcpy(&primecoinBlock.serverData, serverData, 32);
       // start mining
-      BitcoinMiner(&primecoinBlock, threadIndex);
+      BitcoinMiner(&primecoinBlock, psieve, threadIndex);
       primecoinBlock.mpzPrimeChainMultiplier = 0;
    }
+	if( psieve )
+	{
+		delete psieve;
+		psieve = NULL;
+	}
    return 0;
 }
 
@@ -445,8 +451,11 @@ int jhMiner_workerThread_getwork(int threadIndex)
 */
 int jhMiner_workerThread_xpt(int threadIndex)
 {
+	CSieveOfEratosthenes* psieve = NULL;
+
    while( true )
    {
+
       uint8 localBlockData[128];
       // copy block data from global workData
       uint32 workDataHash = 0;
@@ -468,11 +477,17 @@ int jhMiner_workerThread_xpt(int threadIndex)
       memcpy(&primecoinBlock.serverData, serverData, 32);
       // start mining
       //uint32 time1 = GetTickCount();
-      if (!BitcoinMiner(&primecoinBlock, threadIndex))
-         return 0;
+      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex))
+         break;
       //printf("Mining stopped after %dms\n", GetTickCount()-time1);
       primecoinBlock.mpzPrimeChainMultiplier = 0;
    }
+	if( psieve )
+	{
+		delete psieve;
+		psieve = NULL;
+	}
+
    return 0;
 }
 
@@ -757,9 +772,9 @@ void jhMiner_parseCommandline(int argc, char **argv)
 				ExitProcess(0);
 			}
 			commandlineInput.sieveExtensions = atoi(argv[cIdx]);
-			if( commandlineInput.sieveExtensions <= 1 || commandlineInput.sieveExtensions > 15 )
+			if( commandlineInput.sieveExtensions <= 1 || commandlineInput.sieveExtensions > 30 )
 			{
-				printf("-se parameter out of range, must be between 0 - 15\n");
+				printf("-se parameter out of range, must be between 0 - 30\n");
 				ExitProcess(0);
 			}
 			cIdx++;
@@ -1232,7 +1247,7 @@ int jhMiner_main_xptMode()
             //float fourSharePerPeriod = ((double)(primeStats.chainCounter[0][4] - lastFourChainCount) / statsPassedTime) * 3600000.0;
             //lastFiveChainCount = primeStats.chainCounter[0][5];
             //lastFourChainCount = primeStats.chainCounter[0][4];
-            printf("\nVal/h:%8f - PPS:%d - SPS:%.03f - ACC:%d\n", shareValuePerHour, (sint32)primesPerSecond, sievesPerSecond, (sint32)avgCandidatesPerRound);
+            printf("\nVal/h:%8f - PPS:%d - S:%.03f - ACC:%d\n", shareValuePerHour, (sint32)primesPerSecond, sievesPerSecond, (sint32)avgCandidatesPerRound);
             printf(" Chain/Hr: ");
 
             for(int i=6; i<=10; i++)
@@ -1370,11 +1385,11 @@ int main(int argc, char **argv)
    commandlineInput.sievePercentage = 10; // default 
    commandlineInput.roundSievePercentage = 70; // default 
    commandlineInput.enableCacheTunning = false;
-   commandlineInput.L1CacheElements = 256000;
+   commandlineInput.L1CacheElements = 22400;
    commandlineInput.primorialMultiplier = 0; // for default 0 we will swithc aouto tune on
    commandlineInput.targetOverride = 0;
    commandlineInput.targetBTOverride = 0;
-   commandlineInput.initialPrimorial = 61;
+   commandlineInput.initialPrimorial = 43;
    commandlineInput.printDebug = 0;
 	commandlineInput.sieveExtensions = 7;
 

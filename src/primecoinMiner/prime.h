@@ -115,6 +115,7 @@ unsigned int EstimateWorkTransition(unsigned int nPrevWorkTransition, unsigned i
 // prime chain type and length value
 std::string GetPrimeChainName(unsigned int nChainType, unsigned int nChainLength);
 
+/*
 
 // Sieve of Eratosthenes for proof-of-work mining
 //
@@ -487,6 +488,7 @@ public:
       this->nPrimes = (uint64)nTotalPrimes * nSievePercentage / 100;
    }
 };
+*/
 
 inline void mpz_set_uint256(mpz_t r, uint256& u)
 {
