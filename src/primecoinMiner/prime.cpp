@@ -987,7 +987,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
       if( nProbableChainLength > primeStats.bestPrimeChainDifficulty )
          primeStats.bestPrimeChainDifficulty = nProbableChainLength;
 
-      if(nProbableChainLength >= block->serverData.nBitsForShare)
+      if(nProbableChainLength >= 4) //block->serverData.nBitsForShare)
       {
          block->mpzPrimeChainMultiplier = mpzFixedMultiplier * nTriedMultiplier * nLayerMultiplier;
 
@@ -1041,7 +1041,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          // submit this share
          multiplierSet.insert(block->mpzPrimeChainMultiplier);
          multipleShare = true;
-         jhMiner_pushShare_primecoin(blockRawData, block);
+         //jhMiner_pushShare_primecoin(blockRawData, block);
          primeStats.foundShareCount ++;
          RtlZeroMemory(blockRawData, 256);
       }

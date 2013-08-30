@@ -198,8 +198,9 @@ void CSieveOfEratosthenes::Weave()
 
    primeMultiplier_t* primeMultiplier;
    std::vector<sieve_word_t>* compositeDetail;
-   const uint64 maxValue = (uint64)nSieveSize * (nCurrentMultiplierRoundPos + 1);
-   const uint64 offset = (uint64)nSieveSize * nCurrentMultiplierRoundPos;
+   //const uint64 maxValue = (uint64)nSieveSize * (nCurrentMultiplierRoundPos + 1);
+   //const uint64 offset = (uint64)nSieveSize * nCurrentMultiplierRoundPos;
+   const uint64 maxValue = (uint64)nSieveSize;
    for (int layerSeq = 0; layerSeq < nDoubleChainLength; layerSeq++)
    {
       int numPrimeMultipliers = vfPrimeMultipliers[nCurrentMultiplierRoundPos % nNumMultiplierRounds][layerSeq].size();
@@ -213,17 +214,17 @@ void CSieveOfEratosthenes::Weave()
          unsigned int chaintype = (multiplierBits >> 31);
 
          compositeDetail = (multiplierBits >> 31) ? &vfCompositeCunningham1[layerSeq] : &vfCompositeCunningham2[layerSeq];
-         while (variableMultiplier < maxValue);
+         do
          {
-            (*compositeDetail)[GetCandidateWordNum(variableMultiplier - offset)] |= GetCompositeBitMask(variableMultiplier - offset);
+            (*compositeDetail)[GetCandidateWordNum(variableMultiplier)] |= GetCompositeBitMask(variableMultiplier);
             variableMultiplier += nPrime;
-         }
+         }while (variableMultiplier < maxValue);
 
          int nextMultiplierRound = (nCurrentMultiplierRoundPos + (variableMultiplier / nSieveSize)) % nNumMultiplierRounds;
          vfPrimeMultipliers[nextMultiplierRound][layerSeq].emplace_back();
          primeMultiplier =  &vfPrimeMultipliers[nextMultiplierRound][layerSeq].back();
          primeMultiplier->nMultiplierBits = multiplierBits;
-         primeMultiplier->nMultiplierCandidate = variableMultiplier;
+         primeMultiplier->nMultiplierCandidate = variableMultiplier % this->nSieveSize;
       }
 
       // All multipliers dealt with for this layer, clear it and move on.
@@ -261,7 +262,7 @@ void CSieveOfEratosthenes::UpdateCandidateValues()
 
          if (i == nChainLength - 1)
          {
-            vfCandidates[wordNo] = ~(vfCandidates[wordNo] & vfCandidateCunningham1[wordNo]) | ~(vfCandidateBiTwin[wordNo]);
+            vfCandidates[wordNo] = ~(vfCandidateCunningham1[wordNo] & vfCandidates[wordNo] & vfCandidateBiTwin[wordNo]);
             vfCandidateCunningham1[wordNo] = ~(vfCandidateCunningham1[wordNo]);
             vfCandidateBiTwin[wordNo] = ~(vfCandidateBiTwin[wordNo]);
          }
@@ -281,9 +282,10 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
       nCandidateMultiplier++;
       if (nCandidateMultiplier >= nSieveSize) 
       {
-         if (nCandidateLayer >= (nDoubleChainLength - nChainLength))
+         nCandidateLayer++;
+         if (nCandidateLayer > (nDoubleChainLength - nChainLength))
          {
-            if (nCurrentMultiplierRoundPos >= 1) return false; //vPrimes[this->nMaxWeaveMultiplier]) return false;
+            if (nCurrentMultiplierRoundPos >= vPrimes[this->nMaxWeaveMultiplier]) return false;// 1) return false; //
 
             // Sieve for more candidates..
             if (this->nCurrentMultiplierRoundPos == 0)
@@ -299,11 +301,8 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
             //this->Weave();
             nCandidateLayer = 0;
          }
-         else
-         {
-            // Work out next layer
-            nCandidateLayer++;
-         }
+
+         // Update Candidate values
          this->UpdateCandidateValues();
       }
       lWordNum = GetCandidateWordNum(nCandidateMultiplier);
