@@ -29,7 +29,7 @@ class CSieveOfEratosthenes
    unsigned int nChainLength;
    unsigned int nBTCC1ChainLength;
    unsigned int nBTCC2ChainLength;
-   unsigned int nDoubleChainLength;
+   unsigned int nSieveChainLength;
    unsigned int nPrimes;
    unsigned int nNumMultiplierRounds;
    unsigned int nCurrentMultiplierRoundPos;
@@ -44,22 +44,23 @@ class CSieveOfEratosthenes
    unsigned int nCandidateLayer;
 
    // final set of candidates for probable primality checking
-   std::vector<sieve_word_t> vfCandidates;
-   std::vector<sieve_word_t> vfCandidateBiTwin;
-   std::vector<sieve_word_t> vfCandidateCunningham1;
+   sieve_word_t* vfCandidates;
+   sieve_word_t* vfCandidateBiTwin;
+   sieve_word_t* vfCandidateCunningham1;
 
    // bitsets that can be combined to obtain the final bitset of candidates
-   std::vector<std::vector<sieve_word_t>> vfCompositeCunningham1;
-   std::vector<std::vector<sieve_word_t>> vfCompositeCunningham2;
+   sieve_word_t* vfCompositeCunningham1;
+   sieve_word_t* vfCompositeCunningham2;
 
    // multipliers split into sieve segments.
-   std::vector<std::vector<std::vector<primeMultiplier_t>>> vfPrimeMultipliers;
+   primeMultiplier_t* vfPrimeMultipliers;
+   int* vfPrimeMultiplierCounts;
 
-   __inline unsigned int GetCandidateWordNum(unsigned int nBitNum) {
+   unsigned int GetCandidateWordNum(unsigned int nBitNum) {
       return nBitNum / nWordBits;
    }
 
-   __inline sieve_word_t  GetCompositeBitMask(unsigned int nBitNum) {
+   sieve_word_t  GetCompositeBitMask(unsigned int nBitNum) {
       return (sieve_word_t)1UL << (nBitNum % nWordBits);
    }
 /*
@@ -112,6 +113,10 @@ public:
 
    CSieveOfEratosthenes(unsigned int sieveSize, unsigned int sievePercentage, unsigned int nSieveExtension, unsigned int targetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
    {
+      this->nCandidatesWords = 0;
+      this->nSieveChainLength = 0;
+      this->nPrimes = 0;
+      this->nNumMultiplierRounds = 0;
       Init(sieveSize, sievePercentage, nSieveExtension, targetChainLength, mpzHash, mpzFixedMultiplier);
    }
 
@@ -119,7 +124,9 @@ public:
 
    void Init(unsigned int nSieveSize, unsigned int nSievePercentage, unsigned int nSieveExtension, unsigned int nTargetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier);
 
-   void AddMultiplier(const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier);
+   void AddMultiplierWithBits(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nMultiplierBits, const unsigned int nSolvedMultiplier);
+
+   void AddMultiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier);
 
    bool GenerateMultiplierTables();
 

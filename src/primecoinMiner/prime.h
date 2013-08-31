@@ -5,11 +5,9 @@
 #ifndef PRIMECOIN_PRIME_H
 #define PRIMECOIN_PRIME_H
 
-// Removed USE_ROTATE - Testing revealed while it was a good approximation that ran faster it
-// left too many candidates in sieve that cost more on testing than a full sieve operation costs.
-//#if defined(__i386__) || defined(_M_IX86) || defined(_X86_) || defined(__x86_64__) || defined(_M_X64)
-//#define USE_ROTATE
-//#endif
+#if defined(__i386__) || defined(_M_IX86) || defined(_X86_) || defined(__x86_64__) || defined(_M_X64)
+#define USE_ROTATE
+#endif
 
 #ifdef _M_X64
 typedef uint64 sieve_word_t;
@@ -21,11 +19,11 @@ typedef unsigned long sieve_word_t;
 #include "mpirxx.h"
 
 extern std::vector<unsigned int> vPrimes;
-static const unsigned int nMaxSieveExtensions = 20;
-static const unsigned int nMinSieveExtensions = 0;
-static const unsigned int nDefaultSieveExtensions = 10;
-static const unsigned int nDefaultSieveExtensionsTestnet = 4;
-extern unsigned int nSieveExtensions;
+//static const unsigned int nMaxSieveExtensions = 63;
+//static const unsigned int nMinSieveExtensions = 0;
+static const int nDefaultSieveExtensions = -1; // determine to be same as length
+//static const int nDefaultSieveExtensionsTestnet = 4;
+extern int nSieveExtensions;
 
 extern unsigned int nMaxSieveSize;
 extern unsigned int nSievePercentage;

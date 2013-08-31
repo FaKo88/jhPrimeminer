@@ -28,7 +28,7 @@ uint64 GetTimeMicros()
 }
 
 std::vector<unsigned int> vPrimes;
-unsigned int nSieveExtensions = nDefaultSieveExtensions;
+int nSieveExtensions = nDefaultSieveExtensions;
 
 static unsigned int int_invert(unsigned int a, unsigned int nPrime);
 
@@ -879,6 +879,8 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
    else
       lSieveBTTarget = lSieveTarget; // Set to same as target
 
+   if (nSieveExtensions == -1) nSieveExtensions = lSieveTarget;
+
    //int64 nStart, nCurrent; // microsecond timer
    if (*psieve == NULL)
    {
@@ -950,7 +952,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          }
       }
 
-      mpzChainOrigin = mpzHash * mpzFixedMultiplier * nTriedMultiplier * nLayerMultiplier;		
+      mpzChainOrigin = mpzHash * mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier);		
       nChainLength = 0;		
       ProbablePrimeChainTestFast(mpzChainOrigin, testParams);
       nProbableChainLength = nChainLength;
@@ -987,9 +989,9 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
       if( nProbableChainLength > primeStats.bestPrimeChainDifficulty )
          primeStats.bestPrimeChainDifficulty = nProbableChainLength;
 
-      if(nProbableChainLength >= 4) //block->serverData.nBitsForShare)
+      if(nProbableChainLength >= block->serverData.nBitsForShare)
       {
-         block->mpzPrimeChainMultiplier = mpzFixedMultiplier * nTriedMultiplier * nLayerMultiplier;
+         block->mpzPrimeChainMultiplier = mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier);
 
          if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
             continue;
@@ -1041,7 +1043,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          // submit this share
          multiplierSet.insert(block->mpzPrimeChainMultiplier);
          multipleShare = true;
-         //jhMiner_pushShare_primecoin(blockRawData, block);
+         jhMiner_pushShare_primecoin(blockRawData, block);
          primeStats.foundShareCount ++;
          RtlZeroMemory(blockRawData, 256);
       }

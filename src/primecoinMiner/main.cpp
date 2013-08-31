@@ -615,9 +615,9 @@ void jhMiner_parseCommandline(int argc, char **argv)
             ExitProcess(0);
          }
          commandlineInput.sieveSize = atoi(argv[cIdx]);
-			if( commandlineInput.sieveSize < 200000 || commandlineInput.sieveSize > 100000000 )
+			if( commandlineInput.sieveSize < 2000 || commandlineInput.sieveSize > 100000000 )
          {
-				printf("-s parameter out of range, must be between 200000 - 100000000");
+				printf("-s parameter out of range, must be between 2000 - 100000000");
             ExitProcess(0);
          }
          cIdx++;
@@ -772,9 +772,9 @@ void jhMiner_parseCommandline(int argc, char **argv)
 				ExitProcess(0);
 			}
 			commandlineInput.sieveExtensions = atoi(argv[cIdx]);
-			if( commandlineInput.sieveExtensions <= 1 || commandlineInput.sieveExtensions > 30 )
+			if( commandlineInput.sieveExtensions < 0 || commandlineInput.sieveExtensions > 63 )
 			{
-				printf("-se parameter out of range, must be between 0 - 30\n");
+				printf("-se parameter out of range, must be between 0 - 63\n");
 				ExitProcess(0);
 			}
 			cIdx++;
@@ -1389,9 +1389,9 @@ int main(int argc, char **argv)
    commandlineInput.primorialMultiplier = 0; // for default 0 we will swithc aouto tune on
    commandlineInput.targetOverride = 0;
    commandlineInput.targetBTOverride = 0;
-   commandlineInput.initialPrimorial = 43;
+   commandlineInput.initialPrimorial = 41;
    commandlineInput.printDebug = 0;
-	commandlineInput.sieveExtensions = 7;
+	commandlineInput.sieveExtensions = -1;
 
    commandlineInput.sievePrimeLimit = 0;
    // parse command lines
