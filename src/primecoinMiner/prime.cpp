@@ -844,7 +844,7 @@ static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPr
 //boost::thread_specific_ptr<CSieveOfEratosthenes> psieve;
 
 // Mine probable prime chain of form: n = h * p# +/- 1
-bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* block, mpz_class& mpzFixedMultiplier, bool& fNewBlock, unsigned int& nProbableChainLength, 
+bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* block, mpz_class& mpzFixedMultiplier, bool& fNewBlock, unsigned int& nProbableChainLength, 
                             unsigned int& nTests, unsigned int& nPrimesHit, sint32 threadIndex, mpz_class& mpzHash, unsigned int nPrimorialMultiplier)
 {
 
@@ -879,23 +879,29 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
    else
       lSieveBTTarget = lSieveTarget; // Set to same as target
 
-   if (nSieveExtensions == -1) nSieveExtensions = lSieveTarget;
+
+   //mpzHash.set_str("b5a9a5282286e14ab043c57d9dcedbfcc58d3f4ca959495d0346a719509357c2", 16);
+   //mpzFixedMultiplier.set_str("eabf889075749e389f3d41c03b3baa63d5aecc044b",16);
 
    //int64 nStart, nCurrent; // microsecond timer
-   if (*psieve == NULL)
+   if (psieve == NULL)
    {
       // Build sieve
-      *psieve = new CSieveOfEratosthenes(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, mpzHash, mpzFixedMultiplier);
+      psieve = new CSieveOfEratosthenes(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, mpzHash, mpzFixedMultiplier);
       //(*psieve)->Weave();
    }
    else
    {
-      (*psieve)->Init(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, mpzHash, mpzFixedMultiplier);
+      psieve->Init(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, mpzHash, mpzFixedMultiplier);
       //(*psieve)->Weave();
    }
 
    //primeStats.nSieveRounds++;
    //primeStats.nCandidateCount += (*psieve)->GetCandidateCount();
+
+   //printf("\nHash: %s", mpzHash.get_str(16).c_str());
+   //printf("\nMultiplier: %s", mpzFixedMultiplier.get_str(16).c_str());
+   //printf("\nCandidate Count: %u\n", (*psieve)->GetCandidateCount());
 
    mpz_class mpzHashMultiplier = mpzHash * mpzFixedMultiplier;
    mpz_class mpzChainOrigin;
@@ -933,7 +939,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
    while (block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    {
       nTests++;
-      if (!(*psieve)->GetNextCandidateMultiplier(nTriedMultiplier, nLayerMultiplier, nCandidateType))
+      if (!psieve->GetNextCandidateMultiplier(nTriedMultiplier, nLayerMultiplier, nCandidateType))
       {			
          if (!sieveRescan && bFullScan)
          {
@@ -952,6 +958,8 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          }
       }
 
+      //printf(" %u-%u ", nTriedMultiplier, nCandidateType);
+
       mpzChainOrigin = mpzHash * mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier);		
       nChainLength = 0;		
       ProbablePrimeChainTestFast(mpzChainOrigin, testParams);
@@ -960,7 +968,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
 
       primeStats.primeChainsFound++;
 
-      if( nProbableChainLength >= 0x03000000 )
+      if( nProbableChainLength >= 0x06000000 )
       {
          shareDifficultyMajor = (sint32)(nChainLength>>24);
       }
@@ -969,21 +977,21 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
          continue;
       }
 
-      if (shareDifficultyMajor >= 6)
-      {				
-         //if (!sieveRescan)
-         //{				
-         primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
-         primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
-         //if (shareDifficultyMajor >= 4) // auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
-         primeStats.nChainHit++;
-         //}
-         // do a 100% rescan of the sieve for higer shares
-         //if (shareDifficultyMajor >= 5 && nSievePercentage < 66)
-         //{
-         //	bFullScan = true;
-         //}
-      }
+      //if (shareDifficultyMajor >= 6)
+      //{				
+      //   //if (!sieveRescan)
+      //   //{				
+      //   primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
+      //   primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
+      //   //if (shareDifficultyMajor >= 4) // auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
+      //   primeStats.nChainHit++;
+      //   //}
+      //   // do a 100% rescan of the sieve for higer shares
+      //   //if (shareDifficultyMajor >= 5 && nSievePercentage < 66)
+      //   //{
+      //   //	bFullScan = true;
+      //   //}
+      //}
       //if( nProbableChainLength > 0x03000000 )
       //	primeStats.qualityPrimesFound++;
       if( nProbableChainLength > primeStats.bestPrimeChainDifficulty )
@@ -992,60 +1000,92 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes** psieve, primecoinBlock_t* blo
       if(nProbableChainLength >= block->serverData.nBitsForShare)
       {
          block->mpzPrimeChainMultiplier = mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier);
-
-         if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
-            continue;
-
-         //if (sieveRescan)
-         //{
-         //		// count the chains also on rescan
-         //    primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
-         //    primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
-         // }
-
-         // update server data
-         block->serverData.client_shareBits = nProbableChainLength;
-         // generate block raw data
-         uint8 blockRawData[256] = {0};
-         memcpy(blockRawData, block, 80);
-         uint32 writeIndex = 80;
-         sint32 lengthBN = 0;
-         CBigNum bnPrimeChainMultiplier;
-         bnPrimeChainMultiplier.SetHex(block->mpzPrimeChainMultiplier.get_str(16));
-         std::vector<unsigned char> bnSerializeData = bnPrimeChainMultiplier.getvch();
-         lengthBN = bnSerializeData.size();
-         *(uint8*)(blockRawData+writeIndex) = (uint8)lengthBN; // varInt (we assume it always has a size low enough for 1 byte)
-         writeIndex += 1;
-         memcpy(blockRawData+writeIndex, &bnSerializeData[0], lengthBN);
-         writeIndex += lengthBN;	
-         // switch endianness
-         for(uint32 f=0; f<256/4; f++)
+         int minLengthMultiplier,maxLengthMultiplier;
+         minLengthMultiplier = maxLengthMultiplier= 0;
+         // Check for a Non BiTwin greater than min chain length that we can maximise share count from.
+         if ((nCandidateType != PRIME_CHAIN_BI_TWIN) && (nProbableChainLength >= (block->serverData.nBitsForShare + (1UL << 24))))
          {
-            *(uint32*)(blockRawData+f*4) = _swapEndianessU32(*(uint32*)(blockRawData+f*4));
+            // Calculate how many lesser value shares we can glean
+            maxLengthMultiplier = (nProbableChainLength >> 24) - (block->serverData.nBitsForShare >> 24);
+            if ((nProbableChainLength - (maxLengthMultiplier << 24)) < block->serverData.nBitsForShare) maxLengthMultiplier--;
+            if (nProbableChainLength >= block->nBits)
+            {
+               // This is a block solving share - make sure we extract max share value.
+               minLengthMultiplier = 1;
+               while (block->nBits < (nProbableChainLength - (minLengthMultiplier << 24)))
+               {
+                  minLengthMultiplier++;
+               }
+            }
          }
-         time_t now = time(0);
-         struct tm * timeinfo;
-         timeinfo = localtime (&now);
-         char sNow [80];
-         strftime (sNow, 80, "%x-%X",timeinfo);
+         printf("SHARE FOUND - DIFF:%8f - TYPE:%u - MINLEN:%u (%u) - MAXLEN: %u (%u)\n", GetChainDifficulty(nProbableChainLength), nCandidateType, minLengthMultiplier, (1 << minLengthMultiplier), maxLengthMultiplier, (1 << maxLengthMultiplier));
 
-         float shareDiff = GetChainDifficulty(nProbableChainLength);
-
-         printf("%s - SHARE FOUND! - (Th#:%2u) - DIFF:%8f - TYPE:%u", sNow, threadIndex, shareDiff, nCandidateType);
-         if (nPrintDebugMessages)
+         for (int i = maxLengthMultiplier; i >= 0; i--)
          {
-            printf("\nHashNum        : %s ", mpzHash.get_str(16).c_str());
-            printf("\nFixedMultiplier: %s ", mpzFixedMultiplier.get_str(16).c_str());
-            printf("\nHashMultiplier : %u ", nTriedMultiplier);
-         }
-         printf("\n");
+            // Check if this share must be skipped as it solves block prematurely.
+            if ((i > 0) && (i < minLengthMultiplier)) continue; 
 
-         // submit this share
-         multiplierSet.insert(block->mpzPrimeChainMultiplier);
-         multipleShare = true;
-         jhMiner_pushShare_primecoin(blockRawData, block);
-         primeStats.foundShareCount ++;
-         RtlZeroMemory(blockRawData, 256);
+            block->mpzPrimeChainMultiplier = (mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier)) * (1 << i);
+
+            if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
+               continue;
+
+            //if (sieveRescan)
+            //{
+            //		// count the chains also on rescan
+            //    primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
+            //    primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
+            // }
+
+            // update server data
+            block->serverData.client_shareBits = nProbableChainLength - (i << 24);
+
+            primeStats.chainCounter[0][min((block->serverData.client_shareBits >> 24),12)]++;
+            primeStats.chainCounter[nCandidateType][min((block->serverData.client_shareBits >> 24),12)]++;
+            primeStats.nChainHit++;
+
+            // generate block raw data
+            uint8 blockRawData[256] = {0};
+            memcpy(blockRawData, block, 80);
+            uint32 writeIndex = 80;
+            sint32 lengthBN = 0;
+            CBigNum bnPrimeChainMultiplier;
+            bnPrimeChainMultiplier.SetHex(block->mpzPrimeChainMultiplier.get_str(16));
+            std::vector<unsigned char> bnSerializeData = bnPrimeChainMultiplier.getvch();
+            lengthBN = bnSerializeData.size();
+            *(uint8*)(blockRawData+writeIndex) = (uint8)lengthBN; // varInt (we assume it always has a size low enough for 1 byte)
+            writeIndex += 1;
+            memcpy(blockRawData+writeIndex, &bnSerializeData[0], lengthBN);
+            writeIndex += lengthBN;	
+            // switch endianness
+            for(uint32 f=0; f<256/4; f++)
+            {
+               *(uint32*)(blockRawData+f*4) = _swapEndianessU32(*(uint32*)(blockRawData+f*4));
+            }
+            time_t now = time(0);
+            struct tm * timeinfo;
+            timeinfo = localtime (&now);
+            char sNow [80];
+            strftime (sNow, 80, "%x-%X",timeinfo);
+
+            float shareDiff = GetChainDifficulty(block->serverData.client_shareBits);
+
+            printf("%s - SHARE FOUND! - (Th#:%2u) - DIFF:%8f - TYPE:%u", sNow, threadIndex, shareDiff, nCandidateType);
+            if (nPrintDebugMessages)
+            {
+               printf("\nHashNum        : %s ", mpzHash.get_str(16).c_str());
+               printf("\nFixedMultiplier: %s ", mpzFixedMultiplier.get_str(16).c_str());
+               printf("\nHashMultiplier : %u ", nTriedMultiplier);
+            }
+            printf("\n");
+
+            // submit this share
+            multiplierSet.insert(block->mpzPrimeChainMultiplier);
+            multipleShare = true;
+            jhMiner_pushShare_primecoin(blockRawData, block);
+            primeStats.foundShareCount ++;
+            RtlZeroMemory(blockRawData, 256);
+         }
       }
       //if(TargetGetLength(nProbableChainLength) >= 1)
       //	nPrimesHit++;

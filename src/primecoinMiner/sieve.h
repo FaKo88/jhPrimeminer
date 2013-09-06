@@ -31,6 +31,7 @@ class CSieveOfEratosthenes
    unsigned int nBTCC2ChainLength;
    unsigned int nSieveChainLength;
    unsigned int nPrimes;
+   unsigned int nPrimesDoubled;
    unsigned int nNumMultiplierRounds;
    unsigned int nCurrentMultiplierRoundPos;
    unsigned int nCurrentWeaveMultiplier;
@@ -54,7 +55,7 @@ class CSieveOfEratosthenes
 
    // multipliers split into sieve segments.
    primeMultiplier_t* vfPrimeMultipliers;
-   int* vfPrimeMultiplierCounts;
+   unsigned int* vfPrimeMultiplierCounts;
 
    unsigned int GetCandidateWordNum(unsigned int nBitNum) {
       return nBitNum / nWordBits;
@@ -109,6 +110,33 @@ class CSieveOfEratosthenes
       }
    }
 */
+
+   //_inline unsigned int GetPrimeMultiplierPosition(const unsigned int currentMultiplierRound, const unsigned int solvedMultiplier
+
+   unsigned int GetPrimeMultiplierItemPosition(const unsigned int multiplierPos, const unsigned int layerSeq, const unsigned int itemPosition)
+   {
+      const unsigned int lSieveChainLength = this->nSieveChainLength;
+      const unsigned int lPrimesDoubled = this->nPrimesDoubled;
+      return (multiplierPos * lPrimesDoubled * lSieveChainLength) + (lPrimesDoubled * layerSeq) + itemPosition;
+   }
+
+   unsigned int GetPrimeMultiplierCountPosition(const unsigned int multiplierPos, const unsigned int layerSeq)
+   {
+      const unsigned int lSieveChainLength = this->nSieveChainLength;
+      return (multiplierPos * lSieveChainLength) + layerSeq;
+   }
+
+   void AddMultiplierWithBits(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nMultiplierBits, const unsigned int nSolvedMultiplier);
+
+   void AddMultiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier);
+
+   bool GenerateMultiplierTables();
+
+   void Weave();
+
+   void UpdateCandidateValues();
+
+
 public:
 
    CSieveOfEratosthenes(unsigned int sieveSize, unsigned int sievePercentage, unsigned int nSieveExtension, unsigned int targetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
@@ -124,41 +152,31 @@ public:
 
    void Init(unsigned int nSieveSize, unsigned int nSievePercentage, unsigned int nSieveExtension, unsigned int nTargetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier);
 
-   void AddMultiplierWithBits(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nMultiplierBits, const unsigned int nSolvedMultiplier);
-
-   void AddMultiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier);
-
-   bool GenerateMultiplierTables();
-
-   void Weave();
-
-   void UpdateCandidateValues();
-
    bool GetNextCandidateMultiplier(unsigned int& nVariableMultiplier, unsigned int& nLayerMultiplier, unsigned int& nCandidateType);
 
 //
-//   // Get total number of candidates for power test
-//   unsigned int GetCandidateCount()
-//   {
-//      unsigned int nCandidates = 0;
-//#ifdef __GNUC__
-//      for (unsigned int i = 0; i < nCandidatesWords; i++)
-//      {
-//         nCandidates += __builtin_popcountl(vfCandidates[i]);
-//      }
-//#else
-//      for (unsigned int i = 0; i < nCandidatesWords; i++)
-//      {
-//         uint64 lBits = vfCandidates[i];
-//         for (unsigned int j = 0; j < nWordBits; j++)
-//         {
-//            nCandidates += (lBits & 1UL);
-//            lBits >>= 1;
-//         }
-//      }
-//#endif
-//      return nCandidates;
-//   }
+   // Get total number of candidates for power test
+   unsigned int GetCandidateCount()
+   {
+      unsigned int nCandidates = 0;
+#ifdef __GNUC__
+      for (unsigned int i = 0; i < nCandidatesWords; i++)
+      {
+         nCandidates += __builtin_popcountl(vfCandidates[i]);
+      }
+#else
+      for (unsigned int i = 0; i < nCandidatesWords; i++)
+      {
+         sieve_word_t lBits = vfCandidates[i];
+         for (unsigned int j = 0; j < nWordBits; j++)
+         {
+            nCandidates += (lBits & 1UL);
+            lBits >>= 1;
+         }
+      }
+#endif
+      return nCandidates;
+   }
 //
 //   // Scan for the next candidate multiplier (variable part)
 //   // Return values:
