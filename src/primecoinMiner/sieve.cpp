@@ -164,11 +164,11 @@ void CSieveOfEratosthenes::AddMultiplierWithBits(const unsigned int currentMulip
    vfPrimeMultipliers[primeMultiplierItemPos].nMultiplierCandidate = solvedMultiplier % lSieveSize;
 }
 
-void CSieveOfEratosthenes::AddMultiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier)
+void CSieveOfEratosthenes::AddMultiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrime, const unsigned int nSolvedMultiplier)
 {
    this->AddMultiplierWithBits(nCurrentMuliplierRound
       ,nLayerNum
-      ,(isCunninghamChain1 ? (1U << 31) : 0) | ((nLayerNum & 0x000007FF) << 20) | ( nPrimeSeq & 0x000FFFFF)
+      ,(isCunninghamChain1 ? (1U << 31) : 0) | ( nPrime & 0x7FFFFFFF)
       ,nSolvedMultiplier);
 }
 
@@ -214,8 +214,8 @@ bool CSieveOfEratosthenes::GenerateMultiplierTables()
       for (unsigned int nLayerSeq = 0; nLayerSeq < nSieveChainLength; nLayerSeq++)
       {
          // Find the first number that's divisible by this prime
-         AddMultiplier(0, nLayerSeq, true, nPrimeSeq, nFixedInverse);
-         AddMultiplier(0, nLayerSeq, false, nPrimeSeq, nPrime - nFixedInverse);
+         AddMultiplier(0, nLayerSeq, true, nPrime, nFixedInverse);
+         AddMultiplier(0, nLayerSeq, false, nPrime, nPrime - nFixedInverse);
          // For next number in chain
          nFixedInverse = (uint64)nFixedInverse * nTwoInverse % nPrime;
       }
@@ -265,8 +265,7 @@ void CSieveOfEratosthenes::Weave()
          primeMultiplier = &vfPrimeMultipliers[primeMultiplierItemPos + i];
          const unsigned int multiplierBits =  primeMultiplier->nMultiplierBits;
          unsigned int variableMultiplier = primeMultiplier->nMultiplierCandidate;
-         const unsigned int primeSeq = multiplierBits & 0x000FFFFF;
-         const unsigned int prime = vPrimes[primeSeq];
+         const unsigned int prime = multiplierBits & 0x7FFFFFFF;
          // Skip 1 whole "round" so we only do odd number multipliers.
          //if (lCurrentMultiplierRoundPos)
          //{
@@ -351,9 +350,9 @@ void CSieveOfEratosthenes::UpdateCandidateValues()
 {
    //printf("u");
 
-   memset(vfCandidates, 0x55, nCandidatesBytes);
-   memset(vfCandidateBiTwin, 0x55, nCandidatesBytes);
-   memset(vfCandidateCunningham1, 0x55, nCandidatesBytes);
+   memset(vfCandidates, 0x0, nCandidatesBytes);
+   memset(vfCandidateBiTwin, 0x0, nCandidatesBytes);
+   memset(vfCandidateCunningham1, 0x0, nCandidatesBytes);
 
    const unsigned int lSieveChainLength = this->nSieveChainLength;
    const unsigned int lCandidateLayer = this->nCandidateLayer;
@@ -363,12 +362,6 @@ void CSieveOfEratosthenes::UpdateCandidateValues()
       const unsigned int lCompositeStartIndex = (layerSeq + lCandidateLayer) * lCandidateWords;
       for (int wordNo = 0; wordNo < nCandidatesWords; wordNo++)
       {
-         if ((!layerSeq) && (!wordNo))
-         {
-            vfCandidates[wordNo] = 0x5555555555555554;
-            vfCandidateCunningham1[wordNo] = 0x5555555555555554;
-            vfCandidateBiTwin[wordNo] = 0x5555555555555554;
-         }
 
          if ((layerSeq < nBTCC1ChainLength) && (layerSeq < nBTCC2ChainLength))
          {
@@ -414,7 +407,7 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
          nCandidateLayer++;
          if (nCandidateLayer > (nSieveChainLength - nChainLength))
          {
-            if (nCurrentMultiplierRoundPos >= 60) return false; //(vPrimes[this->nMaxWeaveMultiplier] - 1)) return false;//1) return false; // 
+            if (nCurrentMultiplierRoundPos >= 10) return false; //(vPrimes[this->nMaxWeaveMultiplier] - 1)) return false;//1) return false; // 
 
             // Sieve for more candidates..
             //if (this->nCurrentMultiplierRoundPos == 0)
@@ -450,9 +443,9 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
 
       lWordNum = GetCandidateWordNum(nCandidateMultiplier);
       lBits = vfCandidates[lWordNum];
-      if (nCandidateMultiplier % nWordBits == 0)
+      if (nCandidateMultiplier % nWordBits == 1)
       {
-         while (lBits == 0 && nCandidateMultiplier < nSieveSize)
+         while (lBits == 0x5555555555555555 && nCandidateMultiplier < nSieveSize)
          {
             // Skip an entire word
             nCandidateMultiplier += nWordBits;
