@@ -64,52 +64,52 @@ class CSieveOfEratosthenes
    sieve_word_t  GetCompositeBitMask(unsigned int nBitNum) {
       return (sieve_word_t)1UL << (nBitNum % nWordBits);
    }
-/*
+   /*
    __inline void AddMultiplier(unsigned int *vMultipliers, const unsigned int nArrayOffset, const unsigned int nMultiplierPos, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier);
 
 
    void ProcessMultiplier(uint64 *vfComposites,const unsigned int nArrayOffset, const unsigned int nMinMultiplier, const unsigned int nMaxMultiplier, const std::vector<unsigned int>& vPrimes, unsigned int *vMultipliers)
    {
-      // Wipe the part of the array first
-      memset(vfComposites + GetWordNum(nMinMultiplier), 0, (nMaxMultiplier - nMinMultiplier + nWordBits - 1) / nWordBits * sizeof(uint64));
-      int multiplierPos = (nMinPrimeSeq * nArrayOffset) -1;
-      for (unsigned int nPrimeSeq = nMinPrimeSeq; nPrimeSeq < nPrimes; nPrimeSeq++)
-      {
-         const unsigned int nPrime = vPrimes[nPrimeSeq];
-#ifdef USE_ROTATE
-         const unsigned int nRotateBits = nPrime % nWordBits;
-         for (unsigned int i = 0; i < nArrayOffset; i++)
-         {
-            unsigned int nVariableMultiplier = vMultipliers[nPrimeSeq * nArrayOffset + i];
-            if (nVariableMultiplier == 0xFFFFFFFF) continue;
-            unsigned long lBitMask = GetBitMask(nVariableMultiplier);
-            while (nVariableMultiplier < nMaxMultiplier)
-            {
-               vfComposites[GetWordNum(nVariableMultiplier)] |= lBitMask;
-               lBitMask = (lBitMask << nRotateBits) | (lBitMask >> (nWordBits - nRotateBits));
-               nVariableMultiplier += nPrime;
-            }
-            vMultipliers[nPrimeSeq * nArrayOffset + i] = nVariableMultiplier;
-         }
-#else
-         for (unsigned int i = 0; i < nArrayOffset; i++)
-         {
-            multiplierPos++;
-            //unsigned int nVariableMultiplier = vMultipliers[nPrimeSeq * nArrayOffset + i];
-            unsigned int nVariableMultiplier = vMultipliers[multiplierPos];
-            //if (nVariableMultiplier == 0xFFFFFFFF) continue;
-            while (nVariableMultiplier < nMaxMultiplier)
-            {
-               vfComposites[GetWordNum(nVariableMultiplier)] |= GetBitMask(nVariableMultiplier);
-               nVariableMultiplier += nPrime;
-            }
-            //vMultipliers[nPrimeSeq * nArrayOffset + i] = nVariableMultiplier;
-            vMultipliers[multiplierPos] = nVariableMultiplier;
-         }
-#endif
-      }
+   // Wipe the part of the array first
+   memset(vfComposites + GetWordNum(nMinMultiplier), 0, (nMaxMultiplier - nMinMultiplier + nWordBits - 1) / nWordBits * sizeof(uint64));
+   int multiplierPos = (nMinPrimeSeq * nArrayOffset) -1;
+   for (unsigned int nPrimeSeq = nMinPrimeSeq; nPrimeSeq < nPrimes; nPrimeSeq++)
+   {
+   const unsigned int nPrime = vPrimes[nPrimeSeq];
+   #ifdef USE_ROTATE
+   const unsigned int nRotateBits = nPrime % nWordBits;
+   for (unsigned int i = 0; i < nArrayOffset; i++)
+   {
+   unsigned int nVariableMultiplier = vMultipliers[nPrimeSeq * nArrayOffset + i];
+   if (nVariableMultiplier == 0xFFFFFFFF) continue;
+   unsigned long lBitMask = GetBitMask(nVariableMultiplier);
+   while (nVariableMultiplier < nMaxMultiplier)
+   {
+   vfComposites[GetWordNum(nVariableMultiplier)] |= lBitMask;
+   lBitMask = (lBitMask << nRotateBits) | (lBitMask >> (nWordBits - nRotateBits));
+   nVariableMultiplier += nPrime;
    }
-*/
+   vMultipliers[nPrimeSeq * nArrayOffset + i] = nVariableMultiplier;
+   }
+   #else
+   for (unsigned int i = 0; i < nArrayOffset; i++)
+   {
+   multiplierPos++;
+   //unsigned int nVariableMultiplier = vMultipliers[nPrimeSeq * nArrayOffset + i];
+   unsigned int nVariableMultiplier = vMultipliers[multiplierPos];
+   //if (nVariableMultiplier == 0xFFFFFFFF) continue;
+   while (nVariableMultiplier < nMaxMultiplier)
+   {
+   vfComposites[GetWordNum(nVariableMultiplier)] |= GetBitMask(nVariableMultiplier);
+   nVariableMultiplier += nPrime;
+   }
+   //vMultipliers[nPrimeSeq * nArrayOffset + i] = nVariableMultiplier;
+   vMultipliers[multiplierPos] = nVariableMultiplier;
+   }
+   #endif
+   }
+   }
+   */
 
    //_inline unsigned int GetPrimeMultiplierPosition(const unsigned int currentMultiplierRound, const unsigned int solvedMultiplier
 
@@ -131,6 +131,8 @@ class CSieveOfEratosthenes
    void AddMultiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrime, const unsigned int nSolvedMultiplier);
 
    bool GenerateMultiplierTables();
+
+   void ReUsePreviouslyWovenValues(const unsigned int layerSeq, const unsigned int layerOffset);
 
    void Weave();
 
@@ -154,7 +156,7 @@ public:
 
    bool GetNextCandidateMultiplier(unsigned int& nVariableMultiplier, unsigned int& nLayerMultiplier, unsigned int& nCandidateType);
 
-//
+   //
    // Get total number of candidates for power test
    unsigned int GetCandidateCount()
    {
@@ -177,60 +179,60 @@ public:
 #endif
       return nCandidates;
    }
-//
-//   // Scan for the next candidate multiplier (variable part)
-//   // Return values:
-//   //   True - found next candidate; nVariableMultiplier has the candidate
-//   //   False - scan complete, no more candidate and reset scan
-//   bool GetNextCandidateMultiplier(unsigned int& nVariableMultiplier, unsigned int& nCandidateType)
-//   {
-///*      unsigned int lWordNum = GetWordNum(nCandidateMultiplier);
-//
-//      uint64 lBits = vfCandidates[lWordNum];
-//      uint64 lBitMask;
-//
-//      for(;;)
-//      {
-//         nCandidateMultiplier++;
-//         if (nCandidateMultiplier >= nSieveSize)
-//         {
-//            nCandidateMultiplier = 0;
-//            return false;
-//         }
-//         if (nCandidateMultiplier % nWordBits == 0)
-//         {
-//            lWordNum = GetWordNum(nCandidateMultiplier);
-//            lBits = vfCandidates[lWordNum];
-//            if (lBits == 0)
-//            {
-//               // Skip an entire word
-//               nCandidateMultiplier += nWordBits - 1;
-//               continue;
-//            }
-//         }
-//         lBitMask = GetBitMask(nCandidateMultiplier);
-//         if (lBits & lBitMask)
-//         {
-//
-//            nVariableMultiplier = nCandidateMultiplier;
-//            if (vfCandidateBiTwin[GetWordNum(nCandidateMultiplier)] & GetBitMask(nCandidateMultiplier))
-//               nCandidateType = PRIME_CHAIN_BI_TWIN;
-//            else if (vfCandidateCunningham1[GetWordNum(nCandidateMultiplier)] & GetBitMask(nCandidateMultiplier))
-//               nCandidateType = PRIME_CHAIN_CUNNINGHAM1;
-//            else
-//               nCandidateType = PRIME_CHAIN_CUNNINGHAM2;
-//            return true;
-//         }
-//      }
-//      */
-//      return true;
-//   }
-//
-//   void SetSievePercentage(unsigned int newSievePercentage)
-//   {
-//      this->nSievePercentage = newSievePercentage;
-//      this->nPrimes = (uint64)vPrimesSize * nSievePercentage / 100;
-//   }
+   //
+   //   // Scan for the next candidate multiplier (variable part)
+   //   // Return values:
+   //   //   True - found next candidate; nVariableMultiplier has the candidate
+   //   //   False - scan complete, no more candidate and reset scan
+   //   bool GetNextCandidateMultiplier(unsigned int& nVariableMultiplier, unsigned int& nCandidateType)
+   //   {
+   ///*      unsigned int lWordNum = GetWordNum(nCandidateMultiplier);
+   //
+   //      uint64 lBits = vfCandidates[lWordNum];
+   //      uint64 lBitMask;
+   //
+   //      for(;;)
+   //      {
+   //         nCandidateMultiplier++;
+   //         if (nCandidateMultiplier >= nSieveSize)
+   //         {
+   //            nCandidateMultiplier = 0;
+   //            return false;
+   //         }
+   //         if (nCandidateMultiplier % nWordBits == 0)
+   //         {
+   //            lWordNum = GetWordNum(nCandidateMultiplier);
+   //            lBits = vfCandidates[lWordNum];
+   //            if (lBits == 0)
+   //            {
+   //               // Skip an entire word
+   //               nCandidateMultiplier += nWordBits - 1;
+   //               continue;
+   //            }
+   //         }
+   //         lBitMask = GetBitMask(nCandidateMultiplier);
+   //         if (lBits & lBitMask)
+   //         {
+   //
+   //            nVariableMultiplier = nCandidateMultiplier;
+   //            if (vfCandidateBiTwin[GetWordNum(nCandidateMultiplier)] & GetBitMask(nCandidateMultiplier))
+   //               nCandidateType = PRIME_CHAIN_BI_TWIN;
+   //            else if (vfCandidateCunningham1[GetWordNum(nCandidateMultiplier)] & GetBitMask(nCandidateMultiplier))
+   //               nCandidateType = PRIME_CHAIN_CUNNINGHAM1;
+   //            else
+   //               nCandidateType = PRIME_CHAIN_CUNNINGHAM2;
+   //            return true;
+   //         }
+   //      }
+   //      */
+   //      return true;
+   //   }
+   //
+   //   void SetSievePercentage(unsigned int newSievePercentage)
+   //   {
+   //      this->nSievePercentage = newSievePercentage;
+   //      this->nPrimes = (uint64)vPrimesSize * nSievePercentage / 100;
+   //   }
 };
 
 
