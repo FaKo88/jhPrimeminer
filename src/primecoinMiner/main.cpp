@@ -1391,7 +1391,7 @@ int main(int argc, char **argv)
    commandlineInput.targetBTOverride = 0;
    commandlineInput.initialPrimorial = 41;
    commandlineInput.printDebug = 0;
-	commandlineInput.sieveExtensions = -1;
+	commandlineInput.sieveExtensions = 7; // Not Same as HP10 default
 
    commandlineInput.sievePrimeLimit = 0;
    // parse command lines

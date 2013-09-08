@@ -70,18 +70,7 @@ void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int nSievePerc
    this->nChainLength = nTargetChainLength;
    this->nBTCC1ChainLength = (nTargetChainLength + 1) / 2;
    this->nBTCC2ChainLength = nTargetChainLength / 2;
-
-   if (nSieveExtension == -1)
-   {
-      int extensionCount = 0;
-      while ((1UL << extensionCount) < nSieveSize) extensionCount++;
-      this->nSieveExtension = nTargetChainLength + extensionCount + 1;
-   }
-   else
-   {
-      this->nSieveExtension = nSieveExtension;
-   }
-
+   this->nSieveExtension = nSieveExtension;
    this->nSieveChainLength = this->nChainLength + this->nSieveExtension;
    this->mpzHash = mpzHash;
    this->mpzFixedMultiplier = mpzFixedMultiplier;
@@ -279,24 +268,20 @@ void CSieveOfEratosthenes::Weave()
          sieve_word_t bitMask = GetCompositeBitMask(variableMultiplier);
          for (; variableMultiplier < lSieveSize; variableMultiplier += prime)
          {
-            if ((bitMask & 0xAAAAAAAAAAAAAAAA) || !variableMultiplier)
+            const unsigned int variableWordNum = GetCandidateWordNum(variableMultiplier);
+            const unsigned int wordPos = layerOffset + variableWordNum;
+            assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
+            assert(wordPos < (lSieveChainLength * lCandidatesBytes)); // make sure wordpos does not exceed array bounds.
+            assert(wordPos < ((layerSeq + 1) * lCandidatesWords)); // make sure wordpos does not exceed layer bound
+            if (isCunninghamChain1)
             {
-               assert(!variableMultiplier || (variableMultiplier % 2)); // variable multiplier must be 0 or odd;
-               const unsigned int variableWordNum = GetCandidateWordNum(variableMultiplier);
-               assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
-               const unsigned int wordPos = layerOffset + variableWordNum;
-               assert(wordPos < (lSieveChainLength * lCandidatesBytes)); // make sure wordpos does not exceed array bounds.
-               assert(wordPos < ((layerSeq + 1) * lCandidatesWords)); // make sure wordpos does not exceed layer bound
-               if (isCunninghamChain1)
-               {
-                  //_mm_prefetch((const CHAR *)&vfCompositeCunningham1[wordPos + prime], _MM_HINT_NTA);
-                  vfCompositeCunningham1[wordPos] |= bitMask;
-               }
-               else
-               {
-                  //_mm_prefetch((const CHAR *)&vfCompositeCunningham2[wordPos + prime], _MM_HINT_NTA);
-                  vfCompositeCunningham2[wordPos] |= bitMask;
-               }
+               //_mm_prefetch((const CHAR *)&vfCompositeCunningham1[wordPos + prime], _MM_HINT_NTA);
+               vfCompositeCunningham1[wordPos] |= bitMask;
+            }
+            else
+            {
+               //_mm_prefetch((const CHAR *)&vfCompositeCunningham2[wordPos + prime], _MM_HINT_NTA);
+               vfCompositeCunningham2[wordPos] |= bitMask;
             }
             bitMask = (bitMask << rotateBits) | (bitMask >> (lWordBits - rotateBits));
          }
@@ -306,6 +291,9 @@ void CSieveOfEratosthenes::Weave()
             const unsigned int variableWordNum = GetCandidateWordNum(variableMultiplier);
             const unsigned int wordPos = layerOffset + variableWordNum;
             const sieve_word_t bitMask = GetCompositeBitMask(variableMultiplier);
+            assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
+            assert(wordPos < (lSieveChainLength * lCandidatesBytes)); // make sure wordpos does not exceed array bounds.
+            assert(wordPos < ((layerSeq + 1) * lCandidatesWords)); // make sure wordpos does not exceed layer bound
             if (isCunninghamChain1)
             {
                _mm_prefetch((const CHAR *)&vfCompositeCunningham1[wordPos +pPrime], _MM_HINT_NTA);
@@ -445,7 +433,7 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
       lBits = vfCandidates[lWordNum];
       if (nCandidateMultiplier % nWordBits == 1)
       {
-         while (lBits == 0x5555555555555555 && nCandidateMultiplier < nSieveSize)
+         while (lBits == 0 && nCandidateMultiplier < nSieveSize)
          {
             // Skip an entire word
             nCandidateMultiplier += nWordBits;
