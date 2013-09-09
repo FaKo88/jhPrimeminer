@@ -2,6 +2,9 @@
 #define PRIMECOIN_SIEVE_H
 
 #include "mpirxx.h"
+#ifdef _DEBUG
+#include <assert.h>
+#endif
 //
 extern uint32 vPrimesSize;
 extern std::vector<unsigned int> vPrimes;
@@ -126,9 +129,29 @@ class CSieveOfEratosthenes
       return (multiplierPos * lSieveChainLength) + layerSeq;
    }
 
-   void AddMultiplierWithBits(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nMultiplierBits, const unsigned int nSolvedMultiplier);
 
-   void AddMultiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrime, const unsigned int nSolvedMultiplier);
+   void AddMultiplierWithBits(const unsigned int currentMuliplierRound, const unsigned int layerSeq, const unsigned int multiplierBits, const unsigned int solvedMultiplier)
+   {
+      const unsigned int lNumMultiplierRounds = this->nNumMultiplierRounds;
+      const unsigned int lSieveSize = this->nSieveSize;
+      const unsigned int multiplierPos = (currentMuliplierRound + (solvedMultiplier / lSieveSize)) % lNumMultiplierRounds;
+      const unsigned int primeMultiplierCountPos = vfPrimeMultiplierCounts[GetPrimeMultiplierCountPosition(multiplierPos, layerSeq)]++;
+      const unsigned int primeMultiplierItemPos = GetPrimeMultiplierItemPosition(multiplierPos, layerSeq, primeMultiplierCountPos);
+
+      vfPrimeMultipliers[primeMultiplierItemPos].nMultiplierBits = multiplierBits;
+      vfPrimeMultipliers[primeMultiplierItemPos].nMultiplierCandidate = solvedMultiplier % lSieveSize;
+   }
+
+   void AddMultiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrime, const unsigned int nSolvedMultiplier)
+   {
+#ifdef _DEBUG
+      assert(nPrime < 0x7FFFFFFF);
+#endif
+      this->AddMultiplierWithBits(nCurrentMuliplierRound
+         ,nLayerNum
+         ,(isCunninghamChain1 ? (0x80000000) : 0) | nPrime
+         ,nSolvedMultiplier);
+   }
 
    bool GenerateMultiplierTables();
 
