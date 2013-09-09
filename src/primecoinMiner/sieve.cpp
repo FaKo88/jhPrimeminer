@@ -48,11 +48,12 @@ static unsigned int int_invert(unsigned int a, unsigned int nPrime)
 
 CSieveOfEratosthenes::~CSieveOfEratosthenes(void)
 {
-   free(vfCandidates);
-   free(vfCandidateBiTwin);
-   free(vfCandidateCunningham1);
-   free(vfCompositeCunningham1);
-   free(vfCompositeCunningham2);
+   vfCandidates.clear();
+   vfCandidateCunningham1.clear();
+   vfCandidateBiTwin.clear();
+   vfCompositeCunningham1.clear();
+   vfCompositeCunningham2.clear();
+
    free(vfPrimeMultipliers);
    free(vfPrimeMultiplierCounts);
 }
@@ -90,31 +91,36 @@ void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int nSievePerc
    if (oldCandidateWords != nCandidatesWords)
    {
       // Clear and presize arrays for initial use.
-      if (oldCandidateWords != 0)
+      if (oldCandidateWords == 0)
       {
-         free(vfCandidates);
-         free(vfCandidateBiTwin);
-         free(vfCandidateCunningham1);
+         vfCandidates.clear();
+         vfCandidateCunningham1.clear();
+         vfCandidateBiTwin.clear();
       }
-      vfCandidates = (sieve_word_t *)malloc(nCandidatesBytes);
-      vfCandidateBiTwin = (sieve_word_t *)malloc(nCandidatesBytes);
-      vfCandidateCunningham1 = (sieve_word_t *)malloc(nCandidatesBytes);
-      memset(vfCandidates, 0, nCandidatesBytes);
-      memset(vfCandidateBiTwin, 0, nCandidatesBytes);
-      memset(vfCandidateCunningham1, 0, nCandidatesBytes);
+      vfCandidates.resize(this->nCandidatesWords);
+      vfCandidateCunningham1.resize(this->nCandidatesWords);
+      vfCandidateBiTwin.resize(this->nCandidatesWords);
+      memset(&vfCandidates[0], 0, nCandidatesBytes);
+      memset(&vfCandidateCunningham1[0], 0, nCandidatesBytes);
+      memset(&vfCandidateBiTwin[0], 0, nCandidatesBytes);
    }
 
    if ((oldCandidateWords != nCandidatesWords) || (oldSieveChainLength != nSieveChainLength))
    {
       if (oldCandidateWords != 0)
       {
-         free(vfCompositeCunningham1);
-         free(vfCompositeCunningham2);
+         vfCompositeCunningham1.clear();
+         vfCompositeCunningham2.clear();
       }
-      vfCompositeCunningham1 = (sieve_word_t*)malloc(nSieveChainLength * nCandidatesBytes);
-      vfCompositeCunningham2 = (sieve_word_t*)malloc(nSieveChainLength * nCandidatesBytes);
-      memset(vfCompositeCunningham1, 0, (nSieveChainLength * nCandidatesBytes));
-      memset(vfCompositeCunningham2, 0, (nSieveChainLength * nCandidatesBytes));
+      vfCompositeCunningham1.resize(nSieveChainLength);
+      vfCompositeCunningham2.resize(nSieveChainLength);
+      for (int i = 0; i < nSieveChainLength; i++)
+      {
+         vfCompositeCunningham1[i].resize(this->nCandidatesWords);
+         vfCompositeCunningham2[i].resize(this->nCandidatesWords);
+         memset(&vfCompositeCunningham1[i][0], 0, nCandidatesBytes);
+         memset(&vfCompositeCunningham2[i][0], 0, nCandidatesBytes);
+      }
    }
 
    if ((oldSieveChainLength != nSieveChainLength) 
@@ -189,26 +195,21 @@ bool CSieveOfEratosthenes::GenerateMultiplierTables()
 
 }
 
-void CSieveOfEratosthenes::ReUsePreviouslyWovenValues(const unsigned int layerSeq, const unsigned int layerOffset)
+void CSieveOfEratosthenes::ReUsePreviouslyWovenValues(const unsigned int layerSeq)
 {
    if (!layerSeq) return;
 
    const unsigned int lCandidatesWords = this->nCandidatesWords;
-   const unsigned int lSieveSize = this->nSieveSize;
    const unsigned int lWordBits = this->nWordBits;
-   const unsigned int prevlayerOffset = ((layerSeq - 1) * lCandidatesWords);
 
    // Optimisation to reduce duplicate check overhead.
    // If not on layer 0, we've already precalculated the first half of this layer (previous layer)
 #ifdef _M_X64
-   for (int i = 0; i <= lCandidatesWords / 2 ; i++)
+   for (int i = 0; i < lCandidatesWords / 2 ; i++)
    {
       sieve_word_t thisCC1Word = {0};
-      const unsigned int thisLayerWordPos = layerOffset + i;
-      const unsigned int prevWordpos1 = prevlayerOffset + (i * 2);
-      const unsigned int prevWordpos2 = prevWordpos1 + 1;
-      const sieve_word_t previousCC1Word1 = vfCompositeCunningham1[prevWordpos1];
-      const sieve_word_t previousCC1Word2 = vfCompositeCunningham1[prevWordpos2];
+      const sieve_word_t previousCC1Word1 = vfCompositeCunningham1[layerSeq - 1][(i*2)];
+      const sieve_word_t previousCC1Word2 = vfCompositeCunningham1[layerSeq - 1][(i*2) + 1];
 
       thisCC1Word = ((previousCC1Word1 >> 1) & 0x00000001) | ((previousCC1Word1 >> 2) & 0x00000002) | ((previousCC1Word1 >> 3) & 0x00000004) | ((previousCC1Word1 >> 4) & 0x00000008)
          | ((previousCC1Word1 >> 5)  & 0x00000010) | ((previousCC1Word1 >> 6)  & 0x00000020) | ((previousCC1Word1 >> 7)  & 0x00000040) | ((previousCC1Word1 >> 8)  & 0x00000080)
@@ -230,17 +231,14 @@ void CSieveOfEratosthenes::ReUsePreviouslyWovenValues(const unsigned int layerSe
          | ((previousCC1Word2 <<  4) & (0x08000000 << 32)) | ((previousCC1Word2 <<  3) & (0x10000000 << 32)) | ((previousCC1Word2 <<  2) & (0x20000000 << 32)) 
          | ((previousCC1Word2 <<  1) & (0x40000000 << 32)) | ( previousCC1Word2        & (0x80000000 << 32));
 
-      vfCompositeCunningham1[thisLayerWordPos] = thisCC1Word;
+      vfCompositeCunningham1[layerSeq][i] = thisCC1Word;
    }
 
-   for (int i = 0; i <= lCandidatesWords / 2 ; i++)
+   for (int i = 0; i < lCandidatesWords / 2 ; i++)
    {
       sieve_word_t thisCC2Word = {0};
-      const unsigned int thisLayerWordPos = layerOffset + i;
-      const unsigned int prevWordpos1 = prevlayerOffset + (i * 2);
-      const unsigned int prevWordpos2 = prevWordpos1 + 1;
-      const sieve_word_t previousCC2Word1 = vfCompositeCunningham2[prevWordpos1];
-      const sieve_word_t previousCC2Word2 = vfCompositeCunningham2[prevWordpos2];
+      const sieve_word_t previousCC2Word1 = vfCompositeCunningham2[layerSeq - 1][(i*2)];
+      const sieve_word_t previousCC2Word2 = vfCompositeCunningham2[layerSeq - 1][(i*2) + 1];
       thisCC2Word = ((previousCC2Word1 >> 1) & 0x00000001) | ((previousCC2Word1 >> 2) & 0x00000002) | ((previousCC2Word1 >> 3) & 0x00000004) | ((previousCC2Word1 >> 4) & 0x00000008)
          | ((previousCC2Word1 >> 5)  & 0x00000010) | ((previousCC2Word1 >> 6)  & 0x00000020) | ((previousCC2Word1 >> 7)  & 0x00000040) | ((previousCC2Word1 >> 8)  & 0x00000080)
          | ((previousCC2Word1 >> 9)  & 0x00000100) | ((previousCC2Word1 >> 10) & 0x00000200) | ((previousCC2Word1 >> 11) & 0x00000400) | ((previousCC2Word1 >> 12) & 0x00000800)
@@ -261,19 +259,16 @@ void CSieveOfEratosthenes::ReUsePreviouslyWovenValues(const unsigned int layerSe
          | ((previousCC2Word2 <<  4) & (0x08000000 << 32)) | ((previousCC2Word2 <<  3) & (0x10000000 << 32)) | ((previousCC2Word2 <<  2) & (0x20000000 << 32)) 
          | ((previousCC2Word2 <<  1) & (0x40000000 << 32)) | ( previousCC2Word2        & (0x80000000 << 32));
 
-      vfCompositeCunningham2[thisLayerWordPos] = thisCC2Word;
+      vfCompositeCunningham2[layerSeq][i] = thisCC2Word;
    }
 #else
    for (int i = 0; i <= lCandidatesWords / 2 ; i++)
    {
       sieve_word_t thisCC1Word = {0}, thisCC2Word = {0};
-      const unsigned int thisLayerWordPos = layerOffset + i;
-      const unsigned int prevWordpos1 = prevlayerOffset + (i * 2);
-      const unsigned int prevWordpos2 = prevWordpos1 + 1;
-      const sieve_word_t previousCC1Word1 = vfCompositeCunningham1[prevWordpos1];
-      const sieve_word_t previousCC1Word2 = vfCompositeCunningham1[prevWordpos2];
-      const sieve_word_t previousCC2Word1 = vfCompositeCunningham2[prevWordpos1];
-      const sieve_word_t previousCC2Word2 = vfCompositeCunningham2[prevWordpos2];
+      const sieve_word_t previousCC1Word1 = vfCompositeCunningham1[layerSeq - 1][(i*2)];
+      const sieve_word_t previousCC1Word2 = vfCompositeCunningham1[layerSeq - 1][(i*2) + 1];
+      const sieve_word_t previousCC2Word1 = vfCompositeCunningham2[layerSeq - 1][(i*2)];
+      const sieve_word_t previousCC2Word2 = vfCompositeCunningham2[layerSeq - 1][(i*2) + 1];
       const unsigned int halfWordBits = lWordBits / 2;
       const unsigned int wordBitsToShift = halfWordBits - 1;
       for (int j = 0; j <= wordBitsToShift / 2 ; j++)
@@ -282,8 +277,8 @@ void CSieveOfEratosthenes::ReUsePreviouslyWovenValues(const unsigned int layerSe
          thisCC2Word |= ((previousCC2Word1 >> (j + 1)) & (1UL << j)) | ((previousCC2Word2 << (wordBitsToShift - j)) & (1UL << (halfWordBits + j)));
       }
 
-      vfCompositeCunningham1[thisLayerWordPos] = thisCC1Word;
-      vfCompositeCunningham2[thisLayerWordPos] = thisCC2Word;
+      vfCompositeCunningham1[layerSeq][i] = thisCC1Word;
+      vfCompositeCunningham2[layerSeq][i] = thisCC2Word;
    }
 #endif
 }
@@ -318,15 +313,13 @@ void CSieveOfEratosthenes::Weave()
    const unsigned int lWordBits = this->nWordBits;
    const unsigned int multiplierPos = lCurrentMultiplierRoundPos % lNumMultiplierRounds;
 
-   memset(vfCompositeCunningham1, 0, (lCandidatesBytes * lSieveChainLength));
-   memset(vfCompositeCunningham2, 0, (lCandidatesBytes * lSieveChainLength));
-
    for (int layerSeq = 0; layerSeq < lSieveChainLength; layerSeq++)
    {
-      const unsigned int layerOffset = (layerSeq * lCandidatesWords);
+      memset(&vfCompositeCunningham1[layerSeq][0], 0, nCandidatesBytes);
+      memset(&vfCompositeCunningham2[layerSeq][0], 0, nCandidatesBytes);
 
       // Try reuse already woven values.
-      ReUsePreviouslyWovenValues(layerSeq, layerOffset);
+      //ReUsePreviouslyWovenValues(layerSeq);
 
       const unsigned int primeMultiplierItemPos = GetPrimeMultiplierItemPosition(multiplierPos, layerSeq, 0);
       const unsigned int numPrimeMultipliers = vfPrimeMultiplierCounts[GetPrimeMultiplierCountPosition(multiplierPos, layerSeq)];
@@ -346,10 +339,10 @@ void CSieveOfEratosthenes::Weave()
          const bool isCunninghamChain1 = (multiplierBits >> 31);
 
          // Optimisation to reduce duplicate calc/check overhead
-         if ((!layerSeq) && (variableMultiplier < lHalfSieveSize))
-         {
-            variableMultiplier += (lHalfSieveSize - variableMultiplier + prime - 1) / prime * prime;
-         }
+         //if ((!layerSeq) && (variableMultiplier < lHalfSieveSize))
+         //{
+         //   variableMultiplier += (lHalfSieveSize - variableMultiplier + prime - 1) / prime * prime;
+         //}
 
 #ifdef USE_ROTATE
          const unsigned int rotateBits = prime % lWordBits;
@@ -357,21 +350,16 @@ void CSieveOfEratosthenes::Weave()
          for (; variableMultiplier < lSieveSize; variableMultiplier += prime)
          {
             const unsigned int variableWordNum = GetCandidateWordNum(variableMultiplier);
-            const unsigned int wordPos = layerOffset + variableWordNum;
 #ifdef _DEBUG
             assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
-            assert(wordPos < (lSieveChainLength * lCandidatesBytes)); // make sure wordpos does not exceed array bounds.
-            assert(wordPos < ((layerSeq + 1) * lCandidatesWords)); // make sure wordpos does not exceed layer bound
 #endif
             if (isCunninghamChain1)
             {
-               //_mm_prefetch((const CHAR *)&vfCompositeCunningham1[wordPos + prime], _MM_HINT_NTA);
-               vfCompositeCunningham1[wordPos] |= bitMask;
+               vfCompositeCunningham1[layerSeq][variableWordNum] |= bitMask;
             }
             else
             {
-               //_mm_prefetch((const CHAR *)&vfCompositeCunningham2[wordPos + prime], _MM_HINT_NTA);
-               vfCompositeCunningham2[wordPos] |= bitMask;
+               vfCompositeCunningham2[layerSeq][variableWordNum] |= bitMask;
             }
             bitMask = (bitMask << rotateBits) | (bitMask >> (lWordBits - rotateBits));
          }
@@ -379,22 +367,17 @@ void CSieveOfEratosthenes::Weave()
          for (; variableMultiplier < lSieveSize; variableMultiplier += prime)
          {
             const unsigned int variableWordNum = GetCandidateWordNum(variableMultiplier);
-            const unsigned int wordPos = layerOffset + variableWordNum;
             const sieve_word_t bitMask = GetCompositeBitMask(variableMultiplier);
 #ifdef _DEBUG
             assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
-            assert(wordPos < (lSieveChainLength * lCandidatesBytes)); // make sure wordpos does not exceed array bounds.
-            assert(wordPos < ((layerSeq + 1) * lCandidatesWords)); // make sure wordpos does not exceed layer bound
 #endif
             if (isCunninghamChain1)
             {
-               _mm_prefetch((const CHAR *)&vfCompositeCunningham1[wordPos +pPrime], _MM_HINT_NTA);
-               vfCompositeCunningham1[wordPos] |= bitMask;
+               vfCompositeCunningham1[layerSeq][variableWordNum] |= bitMask;
             }
             else
             {
-               _mm_prefetch((const CHAR *)&vfCompositeCunningham2[wordPos + prime], _MM_HINT_NTA);
-               vfCompositeCunningham2[wordPos] |= bitMask;
+               vfCompositeCunningham2[layerSeq][variableWordNum] |= bitMask;
             }
          }
 #endif
@@ -430,9 +413,9 @@ void CSieveOfEratosthenes::UpdateCandidateValues()
 {
    //printf("u");
 
-   memset(vfCandidates, 0x0, nCandidatesBytes);
-   memset(vfCandidateBiTwin, 0x0, nCandidatesBytes);
-   memset(vfCandidateCunningham1, 0x0, nCandidatesBytes);
+   memset(&vfCandidates[0], 0, nCandidatesBytes);
+   memset(&vfCandidateCunningham1[0], 0, nCandidatesBytes);
+   memset(&vfCandidateBiTwin[0], 0, nCandidatesBytes);
 
    const unsigned int lSieveChainLength = this->nSieveChainLength;
    const unsigned int lCandidateLayer = this->nCandidateLayer;
@@ -445,21 +428,19 @@ void CSieveOfEratosthenes::UpdateCandidateValues()
       const unsigned int lCompositeStartIndex = (layerSeq + lCandidateLayer) * lCandidateWords;
       for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
       {
-         const unsigned int lCompositeWordIndex = lCompositeStartIndex + wordNo;
          if (layerSeq < lBTCC1ChainLength)
          {
-            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[lCompositeWordIndex];
+            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[layerSeq][wordNo];
          }
-         vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[lCompositeWordIndex];
+         vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[layerSeq][wordNo];
       }
       for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
       {
-         const unsigned int lCompositeWordIndex = lCompositeStartIndex + wordNo;
          if (layerSeq < lBTCC2ChainLength)
          {
-            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham2[lCompositeWordIndex];
+            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham2[layerSeq][wordNo];
          }
-         vfCandidates[wordNo] |= vfCompositeCunningham2[lCompositeStartIndex + wordNo];
+         vfCandidates[wordNo] |= vfCompositeCunningham2[layerSeq][wordNo];
 
          if (layerSeq == lChainLength - 1)
          {
@@ -530,6 +511,7 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
          {
             // Skip an entire word
             nCandidateMultiplier += nWordBits;
+            if (nCandidateMultiplier >= nSieveSize) continue;
             lWordNum = GetCandidateWordNum(nCandidateMultiplier);
             lBits = vfCandidates[lWordNum];
          }
@@ -548,7 +530,6 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
       //   }
       //}
 
-      if (nCandidateMultiplier >= nSieveSize) continue;
 
       lBitMask = GetCompositeBitMask(nCandidateMultiplier);
       if (lBits & lBitMask)

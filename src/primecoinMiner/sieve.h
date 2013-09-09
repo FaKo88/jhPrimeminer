@@ -48,13 +48,13 @@ class CSieveOfEratosthenes
    unsigned int nCandidateLayer;
 
    // final set of candidates for probable primality checking
-   sieve_word_t* vfCandidates;
-   sieve_word_t* vfCandidateBiTwin;
-   sieve_word_t* vfCandidateCunningham1;
+   std::vector<sieve_word_t> vfCandidates;
+   std::vector<sieve_word_t> vfCandidateBiTwin;
+   std::vector<sieve_word_t> vfCandidateCunningham1;
 
    // bitsets that can be combined to obtain the final bitset of candidates
-   sieve_word_t* vfCompositeCunningham1;
-   sieve_word_t* vfCompositeCunningham2;
+   std::vector<std::vector<sieve_word_t>> vfCompositeCunningham1;
+   std::vector<std::vector<sieve_word_t>> vfCompositeCunningham2;
 
    // multipliers split into sieve segments.
    primeMultiplier_t* vfPrimeMultipliers;
@@ -155,7 +155,7 @@ class CSieveOfEratosthenes
 
    bool GenerateMultiplierTables();
 
-   void ReUsePreviouslyWovenValues(const unsigned int layerSeq, const unsigned int layerOffset);
+   void ReUsePreviouslyWovenValues(const unsigned int layerSeq);
 
    void Weave();
 
