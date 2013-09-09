@@ -73,7 +73,18 @@ void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int nSievePerc
    this->nChainLength = nTargetChainLength;
    this->nBTCC1ChainLength = (nTargetChainLength + 1) / 2;
    this->nBTCC2ChainLength = nTargetChainLength / 2;
-   this->nSieveExtension = nSieveExtension;
+
+   if (nSieveExtension == -1)
+   {
+      int extensionCount = 0;
+      while ((1UL << extensionCount) < nSieveSize) extensionCount++;
+      this->nSieveExtension = nTargetChainLength + extensionCount + 1;
+   }
+   else
+   {
+      this->nSieveExtension = nSieveExtension;
+   }
+
    this->nSieveChainLength = this->nChainLength + this->nSieveExtension;
    this->mpzHash = mpzHash;
    this->mpzFixedMultiplier = mpzFixedMultiplier;
@@ -349,17 +360,21 @@ void CSieveOfEratosthenes::Weave()
          sieve_word_t bitMask = GetCompositeBitMask(variableMultiplier);
          for (; variableMultiplier < lSieveSize; variableMultiplier += prime)
          {
-            const unsigned int variableWordNum = GetCandidateWordNum(variableMultiplier);
+            if ((bitMask & 0xAAAAAAAAAAAAAAAA) || !variableMultiplier)
+            {
+               const unsigned int variableWordNum = GetCandidateWordNum(variableMultiplier);
 #ifdef _DEBUG
-            assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
+               assert(!variableMultiplier || (variableMultiplier % 2)); // variable multiplier must be 0 or odd;
+               assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
 #endif
-            if (isCunninghamChain1)
-            {
-               vfCompositeCunningham1[layerSeq][variableWordNum] |= bitMask;
-            }
-            else
-            {
-               vfCompositeCunningham2[layerSeq][variableWordNum] |= bitMask;
+               if (isCunninghamChain1)
+               {
+                  vfCompositeCunningham1[layerSeq][variableWordNum] |= bitMask;
+               }
+               else
+               {
+                  vfCompositeCunningham2[layerSeq][variableWordNum] |= bitMask;
+               }
             }
             bitMask = (bitMask << rotateBits) | (bitMask >> (lWordBits - rotateBits));
          }
@@ -464,7 +479,10 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
 
    while (true)
    {
-      nCandidateMultiplier++;
+      if (nCandidateMultiplier)
+         nCandidateMultiplier += 2;
+      else
+         nCandidateMultiplier++;
 
       if (nCandidateMultiplier >= nSieveSize) 
       {
@@ -503,11 +521,15 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
          continue;
       }
 
+#ifdef _DEBUG
+      assert(nCandidateMultiplier % 2); // must be an odd number
+#endif
+
       lWordNum = GetCandidateWordNum(nCandidateMultiplier);
       lBits = vfCandidates[lWordNum];
       if (nCandidateMultiplier % nWordBits == 1)
       {
-         while (lBits == 0 && nCandidateMultiplier < nSieveSize)
+         while (lBits == 0x5555555555555555 && nCandidateMultiplier < nSieveSize)
          {
             // Skip an entire word
             nCandidateMultiplier += nWordBits;
