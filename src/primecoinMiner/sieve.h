@@ -17,8 +17,8 @@ typedef unsigned long sieve_word_t;
 
 typedef struct
 {
-   unsigned int nMultiplierBits; // 32 bit integer containing:11 bits for Layer number, 1 bit for CC2 indicator, 20 bits for Prime index. 
    unsigned int nMultiplierCandidate;
+   unsigned int nMultiplierBits; // 32 bit integer containing:11 bits for Layer number, 1 bit for CC2 indicator, 20 bits for Prime index. 
 }primeMultiplier_t;
 
 class CSieveOfEratosthenes
@@ -57,8 +57,11 @@ class CSieveOfEratosthenes
    std::vector<std::vector<sieve_word_t>> vfCompositeCunningham2;
 
    // multipliers split into sieve segments.
-   primeMultiplier_t* vfPrimeMultipliers;
-   unsigned int* vfPrimeMultiplierCounts;
+   std::vector<std::vector<primeMultiplier_t>> vfPrimeMultipliers;
+   std::vector<std::vector<std::vector<primeMultiplier_t*>>> vfExtendedPrimesToWeave;
+   std::vector<unsigned int> vfPrimeMultiplierCounters;
+   std::vector<unsigned int> vfPrimeMultiplierAutoWeaveCounters;
+   std::vector<std::vector<unsigned int>> vfExtendedPrimeCounters;
 
    unsigned int GetCandidateWordNum(unsigned int nBitNum) {
       return nBitNum / nWordBits;
@@ -130,16 +133,19 @@ class CSieveOfEratosthenes
    }
 
 
-   void AddMultiplierWithBits(const unsigned int currentMuliplierRound, const unsigned int layerSeq, const unsigned int multiplierBits, const unsigned int solvedMultiplier)
+   void UpdateExtendedMultiplierList(const unsigned int currentMuliplierRound, const unsigned int nLayerNum, const unsigned int solvedMultiplier, primeMultiplier_t* primeMultiplier)
    {
       const unsigned int lNumMultiplierRounds = this->nNumMultiplierRounds;
       const unsigned int lSieveSize = this->nSieveSize;
       const unsigned int multiplierPos = (currentMuliplierRound + (solvedMultiplier / lSieveSize)) % lNumMultiplierRounds;
-      const unsigned int primeMultiplierCountPos = vfPrimeMultiplierCounts[GetPrimeMultiplierCountPosition(multiplierPos, layerSeq)]++;
-      const unsigned int primeMultiplierItemPos = GetPrimeMultiplierItemPosition(multiplierPos, layerSeq, primeMultiplierCountPos);
+      const unsigned int extendedPrimeCount = vfExtendedPrimeCounters[nLayerNum][multiplierPos]++;
 
-      vfPrimeMultipliers[primeMultiplierItemPos].nMultiplierBits = multiplierBits;
-      vfPrimeMultipliers[primeMultiplierItemPos].nMultiplierCandidate = solvedMultiplier % lSieveSize;
+      if (extendedPrimeCount >= vfExtendedPrimesToWeave[nLayerNum][multiplierPos].size())
+      {
+         vfExtendedPrimesToWeave[nLayerNum][multiplierPos].resize(extendedPrimeCount * 1.5);
+      }
+      vfExtendedPrimesToWeave[nLayerNum][multiplierPos][extendedPrimeCount] = &*primeMultiplier;
+      primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
    }
 
    void AddMultiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrime, const unsigned int nSolvedMultiplier)
@@ -147,15 +153,26 @@ class CSieveOfEratosthenes
 #ifdef _DEBUG
       assert(nPrime < 0x7FFFFFFF);
 #endif
-      this->AddMultiplierWithBits(nCurrentMuliplierRound
-         ,nLayerNum
-         ,(isCunninghamChain1 ? (0x80000000) : 0) | nPrime
-         ,nSolvedMultiplier);
+      const unsigned int lSieveSize = this->nSieveSize;
+      const unsigned int insertPos = vfPrimeMultiplierCounters[nLayerNum]++;
+      vfPrimeMultipliers[nLayerNum][insertPos].nMultiplierCandidate = nSolvedMultiplier;
+      vfPrimeMultipliers[nLayerNum][insertPos].nMultiplierBits = (isCunninghamChain1 ? (0x80000000) : 0) | nPrime;
+
+      if (nPrime <= lSieveSize)
+      {
+         vfPrimeMultiplierAutoWeaveCounters[nLayerNum]++;
+      }
+      else
+      {
+         UpdateExtendedMultiplierList(nCurrentMuliplierRound, nLayerNum, nSolvedMultiplier, &vfPrimeMultipliers[nLayerNum][insertPos]);
+      }
    }
 
    bool GenerateMultiplierTables();
 
    void ReUsePreviouslyWovenValues(const unsigned int layerSeq);
+
+   void ProcessPrimeMultiplier(primeMultiplier_t* multiplierToProcess, unsigned int& solvedMultiplier, unsigned int layerSeq);
 
    void Weave();
 
