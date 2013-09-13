@@ -79,7 +79,7 @@ void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int nSievePerc
       int extensionCount = 0;
       while ((1UL << extensionCount) < nSieveSize) extensionCount++;
       this->nSieveExtension = nTargetChainLength + extensionCount + 1;
-      nSieveExtensions = this->nSieveExtension;
+      //nSieveExtensions = this->nSieveExtension;
    }
    else
    {
@@ -475,29 +475,29 @@ void CSieveOfEratosthenes::UpdateCandidateValues()
    for (int layerSeq = 0; layerSeq < lChainLength; layerSeq++)
    {
       const unsigned int lCompositeStartIndex = (layerSeq + lCandidateLayer) * lCandidateWords;
+      const bool fUpdateBiTwinForCC1 = (layerSeq < lBTCC1ChainLength) ? 1 : 0;
+      const bool fUpdateBiTwinForCC2 = (layerSeq < lBTCC2ChainLength) ? 1 : 0;
       for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
       {
-         if (layerSeq < lBTCC1ChainLength)
+         vfCandidates[wordNo] |= vfCompositeCunningham2[layerSeq][wordNo];
+         vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[layerSeq][wordNo];
+         if (fUpdateBiTwinForCC2) // Only need to check 1 part of the BiTwin, the lesser part. If this is true, the greater part must also be true.
+         {
+            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[layerSeq][wordNo] | vfCompositeCunningham2[layerSeq][wordNo];
+         }
+         else if(fUpdateBiTwinForCC1)
          {
             vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[layerSeq][wordNo];
          }
-         vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[layerSeq][wordNo];
       }
-      for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
-      {
-         if (layerSeq < lBTCC2ChainLength)
-         {
-            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham2[layerSeq][wordNo];
-         }
-         vfCandidates[wordNo] |= vfCompositeCunningham2[layerSeq][wordNo];
+   }
 
-         if (layerSeq == lChainLength - 1)
-         {
-            vfCandidates[wordNo] = ~(vfCandidateCunningham1[wordNo] & vfCandidates[wordNo] & vfCandidateBiTwin[wordNo]);
-            vfCandidateCunningham1[wordNo] = ~(vfCandidateCunningham1[wordNo]);
-            vfCandidateBiTwin[wordNo] = ~(vfCandidateBiTwin[wordNo]);
-         }
-      }
+   // Final and.or combination
+   for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
+   {
+      vfCandidates[wordNo] = ~(vfCandidateCunningham1[wordNo] & vfCandidates[wordNo] & vfCandidateBiTwin[wordNo]);
+      vfCandidateCunningham1[wordNo] = ~(vfCandidateCunningham1[wordNo]);
+      vfCandidateBiTwin[wordNo] = ~(vfCandidateBiTwin[wordNo]);
    }
    nCandidateMultiplier = 0;
    //primeStats.nCandidateCount += this->GetCandidateCount();
@@ -567,10 +567,11 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
          {
             // Skip an entire word
             nCandidateMultiplier += nWordBits;
-            if (nCandidateMultiplier >= nSieveSize) continue;
+            if (nCandidateMultiplier >= nSieveSize) break;
             lWordNum = GetCandidateWordNum(nCandidateMultiplier);
             lBits = vfCandidates[lWordNum];
          }
+         if (nCandidateMultiplier >= nSieveSize) continue;
       }
       //if (nCandidateMultiplier % nWordBits == 0)
       //{
