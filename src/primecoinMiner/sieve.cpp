@@ -474,20 +474,20 @@ void CSieveOfEratosthenes::UpdateCandidateValues()
    const unsigned int lChainLength = this->nChainLength;
    for (int layerSeq = 0; layerSeq < lChainLength; layerSeq++)
    {
-      const unsigned int lCompositeStartIndex = (layerSeq + lCandidateLayer) * lCandidateWords;
+      const unsigned int lCompositeIndex = (layerSeq + lCandidateLayer);
       const bool fUpdateBiTwinForCC1 = (layerSeq < lBTCC1ChainLength) ? 1 : 0;
       const bool fUpdateBiTwinForCC2 = (layerSeq < lBTCC2ChainLength) ? 1 : 0;
       for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
       {
-         vfCandidates[wordNo] |= vfCompositeCunningham2[layerSeq][wordNo];
-         vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[layerSeq][wordNo];
+         vfCandidates[wordNo] |= vfCompositeCunningham2[lCompositeIndex][wordNo];
+         vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[lCompositeIndex][wordNo];
          if (fUpdateBiTwinForCC2) // Only need to check 1 part of the BiTwin, the lesser part. If this is true, the greater part must also be true.
          {
-            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[layerSeq][wordNo] | vfCompositeCunningham2[layerSeq][wordNo];
+            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[lCompositeIndex][wordNo] | vfCompositeCunningham2[lCompositeIndex][wordNo];
          }
          else if(fUpdateBiTwinForCC1)
          {
-            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[layerSeq][wordNo];
+            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[lCompositeIndex][wordNo];
          }
       }
    }
