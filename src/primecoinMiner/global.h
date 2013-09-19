@@ -117,15 +117,11 @@ typedef struct
 	volatile float fBlockShareValue;
 	volatile float fTotalSubmittedShareValue;
 	volatile uint32 chainCounter[4][13];
-	volatile uint32 nWaveTime;
-	volatile unsigned int nWaveRound;
-	volatile uint32 nTestTime;
-	volatile unsigned int nTestRound;
 
 	volatile float nChainHit;
 	volatile float nPrevChainHit;
 	volatile unsigned int nPrimorialMultiplier;
-	
+	volatile unsigned int nSieveLayers;
    volatile float nSieveRounds;
    volatile float nCandidateCount;
 
@@ -136,13 +132,21 @@ typedef struct
 	//volatile uint32 qualityPrimesFound;
 	volatile uint32 bestPrimeChainDifficulty;
 	volatile double bestPrimeChainDifficultySinceLaunch;
-	uint32 primeLastUpdate;
 	uint32 blockStartTime;
 	uint32 startTime;
 	bool shareFound;
 	bool shareRejected;
 	volatile unsigned int nL1CacheElements;
 
+   volatile double nBestNumbersTestedPerSecond;
+   volatile double nLastNumbersTestedPerSecond;
+	volatile unsigned int nBestPrimorialMultiplier;
+	volatile unsigned int nBestPrimeCount;
+	volatile unsigned int nBestSieveSize;
+   volatile unsigned int nPrimesAdjustmentAmount;
+   volatile unsigned int nSieveAdjustmentAmount;
+   volatile unsigned int nAdjustmentType;
+	volatile int nAdjustmentsMode;
 }primeStats_t;
 
 extern primeStats_t primeStats;

@@ -19,14 +19,11 @@ typedef unsigned long sieve_word_t;
 #include "mpirxx.h"
 
 extern std::vector<unsigned int> vPrimes;
-//static const unsigned int nMaxSieveExtensions = 63;
-//static const unsigned int nMinSieveExtensions = 0;
 static const int nDefaultSieveExtensions = -1; // determine to be same as length
-//static const int nDefaultSieveExtensionsTestnet = 4;
 extern int nSieveExtensions;
 
 extern unsigned int nMaxSieveSize;
-extern unsigned int nSievePercentage;
+extern unsigned int nMaxPrimes;
 extern bool nPrintDebugMessages;
 extern unsigned long nOverrideTargetValue;
 extern unsigned int nOverrideBTTargetValue;

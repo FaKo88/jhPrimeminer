@@ -1,4 +1,5 @@
 #include "global.h"
+#include "sha256.h"
 #ifdef _DEBUG
 #include <assert.h>
 #endif
@@ -58,7 +59,7 @@ CSieveOfEratosthenes::~CSieveOfEratosthenes(void)
    vfExtendedPrimesToWeave.clear();
 }
 
-void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int nSievePercentage, unsigned int nSieveExtension, unsigned int nTargetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
+void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int numPrimes, unsigned int targetChainLength, unsigned int btTargetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
 {
    //printf("Starting Sieve Initialise... \n");
    //printf("\nI");
@@ -69,31 +70,24 @@ void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int nSievePerc
    unsigned int oldPrimeCount = this->nPrimes;
 
    this->nSieveSize = nSieveSize;
-   this->nSievePercentage = nSievePercentage;
-   this->nChainLength = nTargetChainLength;
-   this->nBTCC1ChainLength = (nTargetChainLength + 1) / 2;
-   this->nBTCC2ChainLength = nTargetChainLength / 2;
+   this->nChainLength = targetChainLength;
+   this->nBTCC1ChainLength = (btTargetChainLength + 1) / 2;
+   this->nBTCC2ChainLength = btTargetChainLength / 2;
 
-   if (nSieveExtension == -1)
-   {
-      int extensionCount = 0;
-      while ((1UL << extensionCount) < nSieveSize) extensionCount++;
-      this->nSieveExtension = nTargetChainLength + extensionCount + 1;
-      //nSieveExtensions = this->nSieveExtension;
-   }
-   else
-   {
-      this->nSieveExtension = nSieveExtension;
-   }
+   int extensionCount = 0;
+   while ((1UL << extensionCount) < nSieveSize) extensionCount++;
+   this->nSieveExtension = max(targetChainLength,btTargetChainLength) + extensionCount + 1;
+   primeStats.nSieveLayers = this->nSieveExtension;
 
    this->nSieveChainLength = this->nChainLength + this->nSieveExtension;
    this->mpzHash = mpzHash;
    this->mpzFixedMultiplier = mpzFixedMultiplier;
-   this->nPrimes = (unsigned int)vPrimesSize * nSievePercentage / 100;
+   this->nPrimes = numPrimes;
    this->nPrimesDoubled = this->nPrimes * 2;
    this->nNumMultiplierRounds = (vPrimes[nPrimes-1] / nSieveSize) + 3; // Enough rounds for all prime values.
    this->nCurrentMultiplierRoundPos = 0;
    this->nCurrentWeaveMultiplier = 0;
+   this->nMaxWeaveMultiplier = ceil(4096000 / this->nSieveSize); // Enough rounds to get candidate numbers > 4mill.
 
    this->nCandidatesWords = (nSieveSize + nWordBits - 1) / nWordBits;
    this->nCandidatesBytes = nCandidatesWords * sizeof(sieve_word_t);
@@ -178,7 +172,7 @@ void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int nSievePerc
    //printf("Finished Generating Multipler tables... \n");
 }
 
-bool CSieveOfEratosthenes::GenerateMultiplierTables()
+void CSieveOfEratosthenes::GenerateMultiplierTables()
 {
    const unsigned int nTotalPrimes = nPrimes;
    const unsigned int nTotalPrimesLessOne = nTotalPrimes-1;
@@ -213,7 +207,10 @@ bool CSieveOfEratosthenes::GenerateMultiplierTables()
       // Find the modulo inverse of fixed factor
       unsigned int nFixedInverse = int_invert(nFixedFactorMod, nPrime);
       if (!nFixedInverse)
-         return error("CSieveOfEratosthenes::GenerateMultiplierTables(): int_invert of fixed factor failed for prime #%u=%u", nPrimeSeq, vPrimes[nPrimeSeq]);
+      {
+         error("CSieveOfEratosthenes::GenerateMultiplierTables(): int_invert of fixed factor failed for prime #%u=%u", nPrimeSeq, vPrimes[nPrimeSeq]);
+         return;
+      }
       unsigned int nTwoInverse = (nPrime + 1) / 2;
 
       // Weave the sieve for the prime
@@ -228,95 +225,95 @@ bool CSieveOfEratosthenes::GenerateMultiplierTables()
    }
 
 }
-
+/*
 void CSieveOfEratosthenes::ReUsePreviouslyWovenValues(const unsigned int layerSeq)
 {
-   if (!layerSeq) return;
+if (!layerSeq) return;
 
-   const unsigned int lCandidatesWords = this->nCandidatesWords;
-   const unsigned int lWordBits = this->nWordBits;
+const unsigned int lCandidatesWords = this->nCandidatesWords;
+const unsigned int lWordBits = this->nWordBits;
 
-   // Optimisation to reduce duplicate check overhead.
-   // If not on layer 0, we've already precalculated the first half of this layer (previous layer)
+// Optimisation to reduce duplicate check overhead.
+// If not on layer 0, we've already precalculated the first half of this layer (previous layer)
 #ifdef _M_X64
-   for (int i = 0; i < lCandidatesWords / 2 ; i++)
-   {
-      sieve_word_t thisCC1Word = {0};
-      const sieve_word_t previousCC1Word1 = vfCompositeCunningham1[layerSeq - 1][(i*2)];
-      const sieve_word_t previousCC1Word2 = vfCompositeCunningham1[layerSeq - 1][(i*2) + 1];
+for (int i = 0; i < lCandidatesWords / 2 ; i++)
+{
+sieve_word_t thisCC1Word = {0};
+const sieve_word_t previousCC1Word1 = vfCompositeCunningham1[layerSeq - 1][(i*2)];
+const sieve_word_t previousCC1Word2 = vfCompositeCunningham1[layerSeq - 1][(i*2) + 1];
 
-      thisCC1Word = ((previousCC1Word1 >> 1) & 0x00000001) | ((previousCC1Word1 >> 2) & 0x00000002) | ((previousCC1Word1 >> 3) & 0x00000004) | ((previousCC1Word1 >> 4) & 0x00000008)
-         | ((previousCC1Word1 >> 5)  & 0x00000010) | ((previousCC1Word1 >> 6)  & 0x00000020) | ((previousCC1Word1 >> 7)  & 0x00000040) | ((previousCC1Word1 >> 8)  & 0x00000080)
-         | ((previousCC1Word1 >> 9)  & 0x00000100) | ((previousCC1Word1 >> 10) & 0x00000200) | ((previousCC1Word1 >> 11) & 0x00000400) | ((previousCC1Word1 >> 12) & 0x00000800)
-         | ((previousCC1Word1 >> 13) & 0x00001000) | ((previousCC1Word1 >> 14) & 0x00002000) | ((previousCC1Word1 >> 15) & 0x00004000) | ((previousCC1Word1 >> 16) & 0x00008000)
-         | ((previousCC1Word1 >> 17) & 0x00010000) | ((previousCC1Word1 >> 18) & 0x00020000) | ((previousCC1Word1 >> 19) & 0x00040000) | ((previousCC1Word1 >> 20) & 0x00080000)
-         | ((previousCC1Word1 >> 21) & 0x00100000) | ((previousCC1Word1 >> 22) & 0x00200000) | ((previousCC1Word1 >> 23) & 0x00400000) | ((previousCC1Word1 >> 24) & 0x00800000)
-         | ((previousCC1Word1 >> 25) & 0x01000000) | ((previousCC1Word1 >> 26) & 0x02000000) | ((previousCC1Word1 >> 27) & 0x04000000) | ((previousCC1Word1 >> 28) & 0x08000000)
-         | ((previousCC1Word1 >> 29) & 0x10000000) | ((previousCC1Word1 >> 30) & 0x20000000) | ((previousCC1Word1 >> 31) & 0x40000000) | ((previousCC1Word1 >> 32) & 0x80000000);
-      thisCC1Word = ((previousCC1Word2 << 31) & (0x00000001 << 32)) | ((previousCC1Word2 << 30) & (0x00000002 << 32)) | ((previousCC1Word2 << 29) & (0x00000004 << 32)) 
-         | ((previousCC1Word2 << 28) & (0x00000008 << 32)) | ((previousCC1Word2 << 27) & (0x00000010 << 32)) | ((previousCC1Word2 << 26) & (0x00000020 << 32)) 
-         | ((previousCC1Word2 << 25) & (0x00000040 << 32)) | ((previousCC1Word2 << 24) & (0x00000080 << 32)) | ((previousCC1Word2 << 23) & (0x00000100 << 32)) 
-         | ((previousCC1Word2 << 22) & (0x00000200 << 32)) | ((previousCC1Word2 << 21) & (0x00000400 << 32)) | ((previousCC1Word2 << 20) & (0x00000800 << 32))
-         | ((previousCC1Word2 << 19) & (0x00001000 << 32)) | ((previousCC1Word2 << 18) & (0x00002000 << 32)) | ((previousCC1Word2 << 17) & (0x00004000 << 32)) 
-         | ((previousCC1Word2 << 16) & (0x00008000 << 32)) | ((previousCC1Word2 << 15) & (0x00010000 << 32)) | ((previousCC1Word2 << 14) & (0x00020000 << 32)) 
-         | ((previousCC1Word2 << 13) & (0x00040000 << 32)) | ((previousCC1Word2 << 12) & (0x00080000 << 32)) | ((previousCC1Word2 << 11) & (0x00100000 << 32)) 
-         | ((previousCC1Word2 << 10) & (0x00200000 << 32)) | ((previousCC1Word2 <<  9) & (0x00400000 << 32)) | ((previousCC1Word2 <<  8) & (0x00800000 << 32))
-         | ((previousCC1Word2 <<  7) & (0x01000000 << 32)) | ((previousCC1Word2 <<  6) & (0x02000000 << 32)) | ((previousCC1Word2 <<  5) & (0x04000000 << 32)) 
-         | ((previousCC1Word2 <<  4) & (0x08000000 << 32)) | ((previousCC1Word2 <<  3) & (0x10000000 << 32)) | ((previousCC1Word2 <<  2) & (0x20000000 << 32)) 
-         | ((previousCC1Word2 <<  1) & (0x40000000 << 32)) | ( previousCC1Word2        & (0x80000000 << 32));
+thisCC1Word = ((previousCC1Word1 >> 1) & 0x00000001) | ((previousCC1Word1 >> 2) & 0x00000002) | ((previousCC1Word1 >> 3) & 0x00000004) | ((previousCC1Word1 >> 4) & 0x00000008)
+| ((previousCC1Word1 >> 5)  & 0x00000010) | ((previousCC1Word1 >> 6)  & 0x00000020) | ((previousCC1Word1 >> 7)  & 0x00000040) | ((previousCC1Word1 >> 8)  & 0x00000080)
+| ((previousCC1Word1 >> 9)  & 0x00000100) | ((previousCC1Word1 >> 10) & 0x00000200) | ((previousCC1Word1 >> 11) & 0x00000400) | ((previousCC1Word1 >> 12) & 0x00000800)
+| ((previousCC1Word1 >> 13) & 0x00001000) | ((previousCC1Word1 >> 14) & 0x00002000) | ((previousCC1Word1 >> 15) & 0x00004000) | ((previousCC1Word1 >> 16) & 0x00008000)
+| ((previousCC1Word1 >> 17) & 0x00010000) | ((previousCC1Word1 >> 18) & 0x00020000) | ((previousCC1Word1 >> 19) & 0x00040000) | ((previousCC1Word1 >> 20) & 0x00080000)
+| ((previousCC1Word1 >> 21) & 0x00100000) | ((previousCC1Word1 >> 22) & 0x00200000) | ((previousCC1Word1 >> 23) & 0x00400000) | ((previousCC1Word1 >> 24) & 0x00800000)
+| ((previousCC1Word1 >> 25) & 0x01000000) | ((previousCC1Word1 >> 26) & 0x02000000) | ((previousCC1Word1 >> 27) & 0x04000000) | ((previousCC1Word1 >> 28) & 0x08000000)
+| ((previousCC1Word1 >> 29) & 0x10000000) | ((previousCC1Word1 >> 30) & 0x20000000) | ((previousCC1Word1 >> 31) & 0x40000000) | ((previousCC1Word1 >> 32) & 0x80000000);
+thisCC1Word = ((previousCC1Word2 << 31) & (0x00000001 << 32)) | ((previousCC1Word2 << 30) & (0x00000002 << 32)) | ((previousCC1Word2 << 29) & (0x00000004 << 32)) 
+| ((previousCC1Word2 << 28) & (0x00000008 << 32)) | ((previousCC1Word2 << 27) & (0x00000010 << 32)) | ((previousCC1Word2 << 26) & (0x00000020 << 32)) 
+| ((previousCC1Word2 << 25) & (0x00000040 << 32)) | ((previousCC1Word2 << 24) & (0x00000080 << 32)) | ((previousCC1Word2 << 23) & (0x00000100 << 32)) 
+| ((previousCC1Word2 << 22) & (0x00000200 << 32)) | ((previousCC1Word2 << 21) & (0x00000400 << 32)) | ((previousCC1Word2 << 20) & (0x00000800 << 32))
+| ((previousCC1Word2 << 19) & (0x00001000 << 32)) | ((previousCC1Word2 << 18) & (0x00002000 << 32)) | ((previousCC1Word2 << 17) & (0x00004000 << 32)) 
+| ((previousCC1Word2 << 16) & (0x00008000 << 32)) | ((previousCC1Word2 << 15) & (0x00010000 << 32)) | ((previousCC1Word2 << 14) & (0x00020000 << 32)) 
+| ((previousCC1Word2 << 13) & (0x00040000 << 32)) | ((previousCC1Word2 << 12) & (0x00080000 << 32)) | ((previousCC1Word2 << 11) & (0x00100000 << 32)) 
+| ((previousCC1Word2 << 10) & (0x00200000 << 32)) | ((previousCC1Word2 <<  9) & (0x00400000 << 32)) | ((previousCC1Word2 <<  8) & (0x00800000 << 32))
+| ((previousCC1Word2 <<  7) & (0x01000000 << 32)) | ((previousCC1Word2 <<  6) & (0x02000000 << 32)) | ((previousCC1Word2 <<  5) & (0x04000000 << 32)) 
+| ((previousCC1Word2 <<  4) & (0x08000000 << 32)) | ((previousCC1Word2 <<  3) & (0x10000000 << 32)) | ((previousCC1Word2 <<  2) & (0x20000000 << 32)) 
+| ((previousCC1Word2 <<  1) & (0x40000000 << 32)) | ( previousCC1Word2        & (0x80000000 << 32));
 
-      vfCompositeCunningham1[layerSeq][i] = thisCC1Word;
-   }
-
-   for (int i = 0; i < lCandidatesWords / 2 ; i++)
-   {
-      sieve_word_t thisCC2Word = {0};
-      const sieve_word_t previousCC2Word1 = vfCompositeCunningham2[layerSeq - 1][(i*2)];
-      const sieve_word_t previousCC2Word2 = vfCompositeCunningham2[layerSeq - 1][(i*2) + 1];
-      thisCC2Word = ((previousCC2Word1 >> 1) & 0x00000001) | ((previousCC2Word1 >> 2) & 0x00000002) | ((previousCC2Word1 >> 3) & 0x00000004) | ((previousCC2Word1 >> 4) & 0x00000008)
-         | ((previousCC2Word1 >> 5)  & 0x00000010) | ((previousCC2Word1 >> 6)  & 0x00000020) | ((previousCC2Word1 >> 7)  & 0x00000040) | ((previousCC2Word1 >> 8)  & 0x00000080)
-         | ((previousCC2Word1 >> 9)  & 0x00000100) | ((previousCC2Word1 >> 10) & 0x00000200) | ((previousCC2Word1 >> 11) & 0x00000400) | ((previousCC2Word1 >> 12) & 0x00000800)
-         | ((previousCC2Word1 >> 13) & 0x00001000) | ((previousCC2Word1 >> 14) & 0x00002000) | ((previousCC2Word1 >> 15) & 0x00004000) | ((previousCC2Word1 >> 16) & 0x00008000)
-         | ((previousCC2Word1 >> 17) & 0x00010000) | ((previousCC2Word1 >> 18) & 0x00020000) | ((previousCC2Word1 >> 19) & 0x00040000) | ((previousCC2Word1 >> 20) & 0x00080000)
-         | ((previousCC2Word1 >> 21) & 0x00100000) | ((previousCC2Word1 >> 22) & 0x00200000) | ((previousCC2Word1 >> 23) & 0x00400000) | ((previousCC2Word1 >> 24) & 0x00800000)
-         | ((previousCC2Word1 >> 25) & 0x01000000) | ((previousCC2Word1 >> 26) & 0x02000000) | ((previousCC2Word1 >> 27) & 0x04000000) | ((previousCC2Word1 >> 28) & 0x08000000)
-         | ((previousCC2Word1 >> 29) & 0x10000000) | ((previousCC2Word1 >> 30) & 0x20000000) | ((previousCC2Word1 >> 31) & 0x40000000) | ((previousCC2Word1 >> 32) & 0x80000000);
-      thisCC2Word = ((previousCC2Word2 << 31) & (0x00000001 << 32)) | ((previousCC2Word2 << 30) & (0x00000002 << 32)) | ((previousCC2Word2 << 29) & (0x00000004 << 32)) 
-         | ((previousCC2Word2 << 28) & (0x00000008 << 32)) | ((previousCC2Word2 << 27) & (0x00000010 << 32)) | ((previousCC2Word2 << 26) & (0x00000020 << 32)) 
-         | ((previousCC2Word2 << 25) & (0x00000040 << 32)) | ((previousCC2Word2 << 24) & (0x00000080 << 32)) | ((previousCC2Word2 << 23) & (0x00000100 << 32)) 
-         | ((previousCC2Word2 << 22) & (0x00000200 << 32)) | ((previousCC2Word2 << 21) & (0x00000400 << 32)) | ((previousCC2Word2 << 20) & (0x00000800 << 32))
-         | ((previousCC2Word2 << 19) & (0x00001000 << 32)) | ((previousCC2Word2 << 18) & (0x00002000 << 32)) | ((previousCC2Word2 << 17) & (0x00004000 << 32)) 
-         | ((previousCC2Word2 << 16) & (0x00008000 << 32)) | ((previousCC2Word2 << 15) & (0x00010000 << 32)) | ((previousCC2Word2 << 14) & (0x00020000 << 32)) 
-         | ((previousCC2Word2 << 13) & (0x00040000 << 32)) | ((previousCC2Word2 << 12) & (0x00080000 << 32)) | ((previousCC2Word2 << 11) & (0x00100000 << 32)) 
-         | ((previousCC2Word2 << 10) & (0x00200000 << 32)) | ((previousCC2Word2 <<  9) & (0x00400000 << 32)) | ((previousCC2Word2 <<  8) & (0x00800000 << 32))
-         | ((previousCC2Word2 <<  7) & (0x01000000 << 32)) | ((previousCC2Word2 <<  6) & (0x02000000 << 32)) | ((previousCC2Word2 <<  5) & (0x04000000 << 32)) 
-         | ((previousCC2Word2 <<  4) & (0x08000000 << 32)) | ((previousCC2Word2 <<  3) & (0x10000000 << 32)) | ((previousCC2Word2 <<  2) & (0x20000000 << 32)) 
-         | ((previousCC2Word2 <<  1) & (0x40000000 << 32)) | ( previousCC2Word2        & (0x80000000 << 32));
-
-      vfCompositeCunningham2[layerSeq][i] = thisCC2Word;
-   }
-#else
-   for (int i = 0; i <= lCandidatesWords / 2 ; i++)
-   {
-      sieve_word_t thisCC1Word = {0}, thisCC2Word = {0};
-      const sieve_word_t previousCC1Word1 = vfCompositeCunningham1[layerSeq - 1][(i*2)];
-      const sieve_word_t previousCC1Word2 = vfCompositeCunningham1[layerSeq - 1][(i*2) + 1];
-      const sieve_word_t previousCC2Word1 = vfCompositeCunningham2[layerSeq - 1][(i*2)];
-      const sieve_word_t previousCC2Word2 = vfCompositeCunningham2[layerSeq - 1][(i*2) + 1];
-      const unsigned int halfWordBits = lWordBits / 2;
-      const unsigned int wordBitsToShift = halfWordBits - 1;
-      for (int j = 0; j <= wordBitsToShift / 2 ; j++)
-      {
-         thisCC1Word |= ((previousCC1Word1 >> (j + 1)) & (1UL << j)) | ((previousCC1Word2 << (wordBitsToShift - j)) & (1UL << (halfWordBits + j)));
-         thisCC2Word |= ((previousCC2Word1 >> (j + 1)) & (1UL << j)) | ((previousCC2Word2 << (wordBitsToShift - j)) & (1UL << (halfWordBits + j)));
-      }
-
-      vfCompositeCunningham1[layerSeq][i] = thisCC1Word;
-      vfCompositeCunningham2[layerSeq][i] = thisCC2Word;
-   }
-#endif
+vfCompositeCunningham1[layerSeq][i] = thisCC1Word;
 }
 
+for (int i = 0; i < lCandidatesWords / 2 ; i++)
+{
+sieve_word_t thisCC2Word = {0};
+const sieve_word_t previousCC2Word1 = vfCompositeCunningham2[layerSeq - 1][(i*2)];
+const sieve_word_t previousCC2Word2 = vfCompositeCunningham2[layerSeq - 1][(i*2) + 1];
+thisCC2Word = ((previousCC2Word1 >> 1) & 0x00000001) | ((previousCC2Word1 >> 2) & 0x00000002) | ((previousCC2Word1 >> 3) & 0x00000004) | ((previousCC2Word1 >> 4) & 0x00000008)
+| ((previousCC2Word1 >> 5)  & 0x00000010) | ((previousCC2Word1 >> 6)  & 0x00000020) | ((previousCC2Word1 >> 7)  & 0x00000040) | ((previousCC2Word1 >> 8)  & 0x00000080)
+| ((previousCC2Word1 >> 9)  & 0x00000100) | ((previousCC2Word1 >> 10) & 0x00000200) | ((previousCC2Word1 >> 11) & 0x00000400) | ((previousCC2Word1 >> 12) & 0x00000800)
+| ((previousCC2Word1 >> 13) & 0x00001000) | ((previousCC2Word1 >> 14) & 0x00002000) | ((previousCC2Word1 >> 15) & 0x00004000) | ((previousCC2Word1 >> 16) & 0x00008000)
+| ((previousCC2Word1 >> 17) & 0x00010000) | ((previousCC2Word1 >> 18) & 0x00020000) | ((previousCC2Word1 >> 19) & 0x00040000) | ((previousCC2Word1 >> 20) & 0x00080000)
+| ((previousCC2Word1 >> 21) & 0x00100000) | ((previousCC2Word1 >> 22) & 0x00200000) | ((previousCC2Word1 >> 23) & 0x00400000) | ((previousCC2Word1 >> 24) & 0x00800000)
+| ((previousCC2Word1 >> 25) & 0x01000000) | ((previousCC2Word1 >> 26) & 0x02000000) | ((previousCC2Word1 >> 27) & 0x04000000) | ((previousCC2Word1 >> 28) & 0x08000000)
+| ((previousCC2Word1 >> 29) & 0x10000000) | ((previousCC2Word1 >> 30) & 0x20000000) | ((previousCC2Word1 >> 31) & 0x40000000) | ((previousCC2Word1 >> 32) & 0x80000000);
+thisCC2Word = ((previousCC2Word2 << 31) & (0x00000001 << 32)) | ((previousCC2Word2 << 30) & (0x00000002 << 32)) | ((previousCC2Word2 << 29) & (0x00000004 << 32)) 
+| ((previousCC2Word2 << 28) & (0x00000008 << 32)) | ((previousCC2Word2 << 27) & (0x00000010 << 32)) | ((previousCC2Word2 << 26) & (0x00000020 << 32)) 
+| ((previousCC2Word2 << 25) & (0x00000040 << 32)) | ((previousCC2Word2 << 24) & (0x00000080 << 32)) | ((previousCC2Word2 << 23) & (0x00000100 << 32)) 
+| ((previousCC2Word2 << 22) & (0x00000200 << 32)) | ((previousCC2Word2 << 21) & (0x00000400 << 32)) | ((previousCC2Word2 << 20) & (0x00000800 << 32))
+| ((previousCC2Word2 << 19) & (0x00001000 << 32)) | ((previousCC2Word2 << 18) & (0x00002000 << 32)) | ((previousCC2Word2 << 17) & (0x00004000 << 32)) 
+| ((previousCC2Word2 << 16) & (0x00008000 << 32)) | ((previousCC2Word2 << 15) & (0x00010000 << 32)) | ((previousCC2Word2 << 14) & (0x00020000 << 32)) 
+| ((previousCC2Word2 << 13) & (0x00040000 << 32)) | ((previousCC2Word2 << 12) & (0x00080000 << 32)) | ((previousCC2Word2 << 11) & (0x00100000 << 32)) 
+| ((previousCC2Word2 << 10) & (0x00200000 << 32)) | ((previousCC2Word2 <<  9) & (0x00400000 << 32)) | ((previousCC2Word2 <<  8) & (0x00800000 << 32))
+| ((previousCC2Word2 <<  7) & (0x01000000 << 32)) | ((previousCC2Word2 <<  6) & (0x02000000 << 32)) | ((previousCC2Word2 <<  5) & (0x04000000 << 32)) 
+| ((previousCC2Word2 <<  4) & (0x08000000 << 32)) | ((previousCC2Word2 <<  3) & (0x10000000 << 32)) | ((previousCC2Word2 <<  2) & (0x20000000 << 32)) 
+| ((previousCC2Word2 <<  1) & (0x40000000 << 32)) | ( previousCC2Word2        & (0x80000000 << 32));
+
+vfCompositeCunningham2[layerSeq][i] = thisCC2Word;
+}
+#else
+for (int i = 0; i <= lCandidatesWords / 2 ; i++)
+{
+sieve_word_t thisCC1Word = {0}, thisCC2Word = {0};
+const sieve_word_t previousCC1Word1 = vfCompositeCunningham1[layerSeq - 1][(i*2)];
+const sieve_word_t previousCC1Word2 = vfCompositeCunningham1[layerSeq - 1][(i*2) + 1];
+const sieve_word_t previousCC2Word1 = vfCompositeCunningham2[layerSeq - 1][(i*2)];
+const sieve_word_t previousCC2Word2 = vfCompositeCunningham2[layerSeq - 1][(i*2) + 1];
+const unsigned int halfWordBits = lWordBits / 2;
+const unsigned int wordBitsToShift = halfWordBits - 1;
+for (int j = 0; j <= wordBitsToShift / 2 ; j++)
+{
+thisCC1Word |= ((previousCC1Word1 >> (j + 1)) & (1UL << j)) | ((previousCC1Word2 << (wordBitsToShift - j)) & (1UL << (halfWordBits + j)));
+thisCC2Word |= ((previousCC2Word1 >> (j + 1)) & (1UL << j)) | ((previousCC2Word2 << (wordBitsToShift - j)) & (1UL << (halfWordBits + j)));
+}
+
+vfCompositeCunningham1[layerSeq][i] = thisCC1Word;
+vfCompositeCunningham2[layerSeq][i] = thisCC2Word;
+}
+#endif
+}
+*/
 void CSieveOfEratosthenes::ProcessPrimeMultiplier(primeMultiplier_t* multiplierToProcess, unsigned int& solvedMultiplier, const unsigned int layerSeq)
 {
    const unsigned int lSieveSize = this->nSieveSize;

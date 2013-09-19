@@ -25,9 +25,8 @@ class CSieveOfEratosthenes
 {
    static const unsigned int nWordBits = 8 * sizeof(sieve_word_t);	
    static const int nMinPrimeSeq = 4; // this is Prime number 11, the first prime with unknown factor status.
-   static const int nMaxWeaveMultiplier = 8; // This is the 9th prime (23) which will be the maximum number of individual weaves.
+   //static const int nMaxWeaveMultiplier = 8; // This is the 9th prime (23) which will be the maximum number of individual weaves.
    unsigned int nSieveSize; // size of the sieve
-   unsigned int nSievePercentage;
    unsigned int nSieveExtension;
    unsigned int nChainLength;
    unsigned int nBTCC1ChainLength;
@@ -38,6 +37,7 @@ class CSieveOfEratosthenes
    unsigned int nNumMultiplierRounds;
    unsigned int nCurrentMultiplierRoundPos;
    unsigned int nCurrentWeaveMultiplier;
+   unsigned int nMaxWeaveMultiplier;
 
    mpz_class mpzHash; // hash of the block header
    mpz_class mpzFixedMultiplier; // fixed round multiplier
@@ -168,9 +168,9 @@ class CSieveOfEratosthenes
       }
    }
 
-   bool GenerateMultiplierTables();
+   void GenerateMultiplierTables();
 
-   void ReUsePreviouslyWovenValues(const unsigned int layerSeq);
+   //void ReUsePreviouslyWovenValues(const unsigned int layerSeq);
 
    void ProcessPrimeMultiplier(primeMultiplier_t* multiplierToProcess, unsigned int& solvedMultiplier, unsigned int layerSeq);
 
@@ -181,18 +181,21 @@ class CSieveOfEratosthenes
 
 public:
 
-   CSieveOfEratosthenes(unsigned int sieveSize, unsigned int sievePercentage, unsigned int nSieveExtension, unsigned int targetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
+
+   unsigned int nSkippedPrimes;
+
+   CSieveOfEratosthenes(unsigned int sieveSize, unsigned int numPrimes, unsigned int targetChainLength, unsigned int btTargetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
    {
       this->nCandidatesWords = 0;
       this->nSieveChainLength = 0;
       this->nPrimes = 0;
       this->nNumMultiplierRounds = 0;
-      Init(sieveSize, sievePercentage, nSieveExtension, targetChainLength, mpzHash, mpzFixedMultiplier);
+      Init(sieveSize, numPrimes, targetChainLength, btTargetChainLength, mpzHash, mpzFixedMultiplier);
    }
 
    ~CSieveOfEratosthenes(void);
 
-   void Init(unsigned int nSieveSize, unsigned int nSievePercentage, unsigned int nSieveExtension, unsigned int nTargetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier);
+   void Init(unsigned int nSieveSize, unsigned int numPrimes, unsigned int targetChainLength, unsigned int btTargetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier);
 
    bool GetNextCandidateMultiplier(unsigned int& nVariableMultiplier, unsigned int& nLayerMultiplier, unsigned int& nCandidateType);
 

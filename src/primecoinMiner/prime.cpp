@@ -15,6 +15,7 @@
 //uint32* vPrimes;
 uint32* vPrimesTwoInverse;
 uint32 vPrimesSize = 0;
+gmp_randstate_t  rands;
 
 __declspec( thread ) BN_CTX* pctx = NULL;
 
@@ -28,28 +29,36 @@ uint64 GetTimeMicros()
 }
 
 std::vector<unsigned int> vPrimes;
-int nSieveExtensions = nDefaultSieveExtensions;
 
 static unsigned int int_invert(unsigned int a, unsigned int nPrime);
 
 
 
-void GeneratePrimeTable(unsigned int nSieveSize)
+void GeneratePrimeTable(unsigned int nNumPrimes)
 {
-   const unsigned int nPrimeTableLimit = nSieveSize ;
+   gmp_randinit_default(rands);
+   const unsigned int nPrimeTableLimit = 20000000 ; // 250000th prime is 3497861
    vPrimes.clear();
    // Generate prime table using sieve of Eratosthenes
    std::vector<bool> vfComposite (nPrimeTableLimit, false);
    for (unsigned int nFactor = 2; nFactor * nFactor < nPrimeTableLimit; nFactor++)
    {
-      if (vfComposite[nFactor])
-         continue;
+      if (vfComposite[nFactor]) continue; // Composite found, not prime.
+
       for (unsigned int nComposite = nFactor * nFactor; nComposite < nPrimeTableLimit; nComposite += nFactor)
          vfComposite[nComposite] = true;
    }
-   for (unsigned int n = 2; n < nPrimeTableLimit; n++)
-      if (!vfComposite[n])
-         vPrimes.push_back(n);
+
+   // Add the required number of primes.
+   for (unsigned int n = 2; n < nPrimeTableLimit ; n++)
+   {
+      if (!vfComposite[n]) vPrimes.push_back(n);
+   }
+   //while (vPrimes.size() < nNumPrimes)
+   //{
+   //   n++;
+   //}
+
    printf("GeneratePrimeTable() : prime table [1, %d] generated with %lu primes\n", nPrimeTableLimit, vPrimes.size());
    vPrimesSize = vPrimes.size();  
 }
@@ -835,8 +844,6 @@ static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPr
       }
    }
 
-   primeStats.nTestRound ++;
-
    return (nChainLength >= nBits);
 }
 
@@ -860,24 +867,32 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
    //}
    fNewBlock = false;
    unsigned int lSieveTarget, lSieveBTTarget;
-   if (nOverrideTargetValue > 0)
-      lSieveTarget = nOverrideTargetValue;
+
+   if (nOverrideBTTargetValue > 0)
+      lSieveBTTarget = nOverrideBTTargetValue;
    else
    {
-      lSieveTarget = TargetGetLength(block->nBits);
       // If Difficulty gets within 1/36th of next target length, its actually more efficent to
       // increase the target length.. While technically worse for share val/hr - this should
       // help block rate.
       // Discussions with jh00 revealed this is non-linear, and graphs show that 0.1 diff is enough
       // to warrant a switch
-      if (GetChainDifficulty(block->nBits) >= ((lSieveTarget + 1) - 0.1f))
-         lSieveTarget++;
+      lSieveBTTarget = TargetGetLength(block->nBits);
+      if (GetChainDifficulty(block->nBits) >= ((lSieveBTTarget + 1) - 0.1f))
+         lSieveBTTarget++;
    }
 
-   if (nOverrideBTTargetValue > 0)
-      lSieveBTTarget = nOverrideBTTargetValue;
+   if (nOverrideTargetValue > 0)
+      lSieveTarget = nOverrideTargetValue;
    else
-      lSieveBTTarget = lSieveTarget; // Set to same as target
+   {
+/*      // sieve target not specified - set to lowest we can for shares.
+      lSieveTarget = TargetGetLength(block->serverData.nBitsForShare);
+      // Make sure its at least CC1 BTTarget + 2.
+      if (lSieveTarget <= ((lSieveBTTarget + 3) / 2)) lSieveTarget++;
+*/
+      lSieveTarget = lSieveBTTarget;
+   }
 
 
    //mpzHash.set_str("b5a9a5282286e14ab043c57d9dcedbfcc58d3f4ca959495d0346a719509357c2", 16);
@@ -887,12 +902,12 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
    if (psieve == NULL)
    {
       // Build sieve
-      psieve = new CSieveOfEratosthenes(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, mpzHash, mpzFixedMultiplier);
+      psieve = new CSieveOfEratosthenes(nMaxSieveSize, nMaxPrimes, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
       //(*psieve)->Weave();
    }
    else
    {
-      psieve->Init(nMaxSieveSize, nSievePercentage, nSieveExtensions, lSieveTarget, mpzHash, mpzFixedMultiplier);
+      psieve->Init(nMaxSieveSize, nMaxPrimes, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
       //(*psieve)->Weave();
    }
 
@@ -934,7 +949,6 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
 
    bool bFullScan = false;
 
-   uint32 start = GetTickCount();
    //while ( (nTests < 7000 || bFullScan ) && block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    while (block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    {
@@ -1096,8 +1110,6 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
    //	delete *psieve;
    //	*psieve = NULL;
    //}
-   uint32 end = GetTickCount(); 
-   primeStats.nTestTime += end-start;
    return rtnValue; // stop as timed out
 }
 

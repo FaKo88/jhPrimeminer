@@ -77,6 +77,7 @@ void xptClient_sendWorkerLogin(xptClient_t* xptClient)
 	xptPacketbuffer_writeString(xptClient->sendBuffer, xptClient->username, 128, &sendError);	// username
 	xptPacketbuffer_writeString(xptClient->sendBuffer, xptClient->password, 128, &sendError);	// password
 	xptPacketbuffer_writeU32(xptClient->sendBuffer, &sendError, xptClient->payloadNum);			// payloadNum
+	xptPacketbuffer_writeString(xptClient->sendBuffer, minerVersionString, 45, &sendError);	// minerVersionString
 	// finalize
 	xptPacketbuffer_finalizeWritePacket(xptClient->sendBuffer);
 	// send to client

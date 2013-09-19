@@ -10,11 +10,13 @@ primeStats_t primeStats = {0};
 volatile int total_shares = 0;
 volatile int valid_shares = 0;
 unsigned int nMaxSieveSize;
-unsigned int nSievePercentage;
+unsigned int nMaxPrimes;
 bool nPrintDebugMessages;
 unsigned long nOverrideTargetValue;
 unsigned int nOverrideBTTargetValue;
 char* dt;
+
+char* minerVersionString = "jhPrimeminer RdB v4 Beta";
 
 bool error(const char *format, ...)
 {
@@ -282,6 +284,8 @@ int queryLocalPrimecoindBlockCount(bool useLocal)
 static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
 static const uint64_t diffone = 0xFFFF000000000000ull;
 
+static const unsigned int MAX_PRIMETABLE_SIZE = 250000;
+
 static double target_diff(const unsigned char *target)
 {
    double targ = 0;
@@ -407,7 +411,7 @@ uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex)
 */
 int jhMiner_workerThread_getwork(int threadIndex)
 {
-	CSieveOfEratosthenes* psieve = NULL;
+   CSieveOfEratosthenes* psieve = NULL;
    while( true )
    {
       uint8 localBlockData[128];
@@ -438,11 +442,11 @@ int jhMiner_workerThread_getwork(int threadIndex)
       BitcoinMiner(&primecoinBlock, psieve, threadIndex);
       primecoinBlock.mpzPrimeChainMultiplier = 0;
    }
-	if( psieve )
-	{
-		delete psieve;
-		psieve = NULL;
-	}
+   if( psieve )
+   {
+      delete psieve;
+      psieve = NULL;
+   }
    return 0;
 }
 
@@ -451,7 +455,7 @@ int jhMiner_workerThread_getwork(int threadIndex)
 */
 int jhMiner_workerThread_xpt(int threadIndex)
 {
-	CSieveOfEratosthenes* psieve = NULL;
+   CSieveOfEratosthenes* psieve = NULL;
 
    while( true )
    {
@@ -482,11 +486,11 @@ int jhMiner_workerThread_xpt(int threadIndex)
       //printf("Mining stopped after %dms\n", GetTickCount()-time1);
       primecoinBlock.mpzPrimeChainMultiplier = 0;
    }
-	if( psieve )
-	{
-		delete psieve;
-		psieve = NULL;
-	}
+   if( psieve )
+   {
+      delete psieve;
+      psieve = NULL;
+   }
 
    return 0;
 }
@@ -499,16 +503,10 @@ typedef struct
    sint32 port;
    sint32 numThreads;
    sint32 sieveSize;
-   sint32 sievePercentage;
-   sint32 roundSievePercentage;
-   sint32 sievePrimeLimit;	// how many primes should be sieved
-   unsigned int L1CacheElements;
-   unsigned int primorialMultiplier;
-   bool enableCacheTunning;
+   sint32 numPrimes;
+   sint32 primorialMultiplier;
    sint32 targetOverride;
    sint32 targetBTOverride;
-   sint32 initialPrimorial;
-   sint32 sieveExtensions;
    bool printDebug;
 }commandlineInput_t;
 
@@ -526,14 +524,12 @@ void jhMiner_printHelp()
    puts("                                     For most efficient mining, set to number of CPU cores");
    puts("   -s <num>                      Set MaxSieveSize range from 200000 - 10000000");
    puts("                                     Default is 1500000.");
-   puts("   -d <num>                      Set SievePercentage - range from 1 - 100");
+   puts("   -d <num>                      Set Number of primes to weave with - range from 1000 - 250000");
    puts("                                     Default is 15 and it's not recommended to use lower values than 8.");
    puts("                                     It limits how many base primes are used to filter out candidate multipliers in the sieve.");
    puts("   -r <num>                      Set RoundSievePercentage - range from 3 - 97");
    puts("                                     The parameter determines how much time is spent running the sieve.");
    puts("                                     By default 80% of time is spent in the sieve and 20% is spent on checking the candidates produced by the sieve");
-   puts("   -primes <num>                 Sets how many prime factors are used to filter the sieve");
-   puts("                                     Default is MaxSieveSize. Valid range: 300 - 200000000");
 
    puts("Example usage:");
    puts("   jhPrimeminer.exe -o http://poolurl.com:8332 -u workername.1 -p workerpass -t 4");
@@ -615,9 +611,9 @@ void jhMiner_parseCommandline(int argc, char **argv)
             ExitProcess(0);
          }
          commandlineInput.sieveSize = atoi(argv[cIdx]);
-			if( commandlineInput.sieveSize < 2000 || commandlineInput.sieveSize > 100000000 )
+         if( commandlineInput.sieveSize < 2000 || commandlineInput.sieveSize > 100000000 )
          {
-				printf("-s parameter out of range, must be between 2000 - 100000000");
+            printf("-s parameter out of range, must be between 2000 - 100000000");
             ExitProcess(0);
          }
          cIdx++;
@@ -630,58 +626,10 @@ void jhMiner_parseCommandline(int argc, char **argv)
             printf("Missing number after -d option\n");
             ExitProcess(0);
          }
-         commandlineInput.sievePercentage = atoi(argv[cIdx]);
-         if( commandlineInput.sievePercentage < 1 || commandlineInput.sievePercentage > 100 )
+         commandlineInput.numPrimes = atoi(argv[cIdx]);
+         if( commandlineInput.numPrimes < 1000 || commandlineInput.numPrimes > MAX_PRIMETABLE_SIZE )
          {
-            printf("-d parameter out of range, must be between 1 - 100");
-            ExitProcess(0);
-         }
-         cIdx++;
-      }
-      else if( memcmp(argument, "-r", 3)==0 )
-      {
-         // -s
-         if( cIdx >= argc )
-         {
-            printf("Missing number after -r option\n");
-            ExitProcess(0);
-         }
-         commandlineInput.roundSievePercentage = atoi(argv[cIdx]);
-         if( commandlineInput.roundSievePercentage < 3 || commandlineInput.roundSievePercentage > 97 )
-         {
-            printf("-r parameter out of range, must be between 3 - 97");
-            ExitProcess(0);
-         }
-         cIdx++;
-      }
-      else if( memcmp(argument, "-primes", 8)==0 )
-      {
-         // -primes
-         if( cIdx >= argc )
-         {
-            printf("Missing number after -primes option\n");
-            ExitProcess(0);
-         }
-         commandlineInput.sievePrimeLimit = atoi(argv[cIdx]);
-         if( commandlineInput.sievePrimeLimit < 300 || commandlineInput.sievePrimeLimit > 200000000 )
-         {
-            printf("-primes parameter out of range, must be between 300 - 200000000");
-            ExitProcess(0);
-         }
-         cIdx++;
-      }
-      else if( memcmp(argument, "-c", 3)==0 )
-      {
-         // -primes
-         if( cIdx >= argc )
-         {
-            printf("Missing number after -c option\n");
-            ExitProcess(0);
-         }
-         commandlineInput.L1CacheElements = atoi(argv[cIdx]);
-         if( commandlineInput.L1CacheElements < 300 || commandlineInput.L1CacheElements > 200000000  || commandlineInput.L1CacheElements % 32 != 0) 
-         {
-            printf("-c parameter out of range, must be between 64000 - 2000000 and multiply of 32");
+            printf("-d parameter out of range, must be between 1000 - %u", MAX_PRIMETABLE_SIZE);
             ExitProcess(0);
          }
          cIdx++;
@@ -700,19 +648,6 @@ void jhMiner_parseCommandline(int argc, char **argv)
             printf("-m parameter out of range, must be between 5 - 1009 and should be a prime number");
             ExitProcess(0);
          }
-         cIdx++;
-      }
-      else if( memcmp(argument, "-tune", 6)==0 )
-      {
-         // -tune
-         if( cIdx >= argc )
-         {
-            printf("Missing flag after -tune option\n");
-            ExitProcess(0);
-         }
-         if (memcmp(argument, "true", 5) == 0 ||  memcmp(argument, "1", 2) == 0)
-            commandlineInput.enableCacheTunning = true;
-
          cIdx++;
       }
       else if( memcmp(argument, "-target", 7)==0 )
@@ -747,38 +682,6 @@ void jhMiner_parseCommandline(int argc, char **argv)
          }
          cIdx++;
       }
-      else if( memcmp(argument, "-primorial", 10)==0 )
-      {
-         // -primorial
-         if( cIdx >= argc )
-         {
-            printf("Missing number after -primorial option\n");
-            ExitProcess(0);
-         }
-         commandlineInput.initialPrimorial = atoi(argv[cIdx]);
-         if( commandlineInput.initialPrimorial < 11 || commandlineInput.initialPrimorial > 1000 )
-         {
-            printf("-primorial parameter out of range, must be between 11 - 1000");
-            ExitProcess(0);
-         }
-         cIdx++;
-      }
-		else if( memcmp(argument, "-se", 4)==0 )
-		{
-			// -target
-			if( cIdx >= argc )
-			{
-				printf("Missing number after -se option\n");
-				ExitProcess(0);
-			}
-			commandlineInput.sieveExtensions = atoi(argv[cIdx]);
-			if( commandlineInput.sieveExtensions < 0 || commandlineInput.sieveExtensions > 63 )
-			{
-				printf("-se parameter out of range, must be between 0 - 63\n");
-				ExitProcess(0);
-			}
-			cIdx++;
-		}
       else if( memcmp(argument, "-debug", 6)==0 )
       {
          // -debug
@@ -826,11 +729,11 @@ int jhMiner_main_getworkMode()
       // calculate stats every second tick
       if( loopCounter&1 )
       {
-         double statsPassedTime = (double)(GetTickCount() - primeStats.primeLastUpdate);
+         double statsPassedTime = (double)(GetTickCount() - primeStats.blockStartTime);
          if( statsPassedTime < 1.0 )
             statsPassedTime = 1.0; // avoid division by zero
          double primesPerSecond = (double)primeStats.primeChainsFound / (statsPassedTime / 1000.0);
-         primeStats.primeLastUpdate = GetTickCount();
+         primeStats.blockStartTime = GetTickCount();
          primeStats.primeChainsFound = 0;
          uint32 bestDifficulty = primeStats.bestPrimeChainDifficulty;
          primeStats.bestPrimeChainDifficulty = 0;
@@ -855,163 +758,6 @@ int jhMiner_main_getworkMode()
    return 0;
 }
 
-bool fIncrementPrimorial = true;
-
-void MultiplierAutoAdjust()
-{
-   //printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-   //printf( "ChainHit:  %f - PrevChainHit: %f - PrimorialMultiplier: %u\n", primeStats.nChainHit, primeStats.nPrevChainHit, primeStats.nPrimorialMultiplier);
-   //printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-   return;
-   //bool fIncrementPrimorial = true;
-   if (primeStats.nChainHit == 0)
-      return;
-
-   if ( primeStats.nChainHit < primeStats.nPrevChainHit)
-      fIncrementPrimorial = !fIncrementPrimorial;
-
-   primeStats.nPrevChainHit = primeStats.nChainHit;
-   primeStats.nChainHit = 0;
-   // Primecoin: dynamic adjustment of primorial multiplier
-   if (fIncrementPrimorial)
-   {
-      if (!PrimeTableGetNextPrime((unsigned int)  primeStats.nPrimorialMultiplier))
-         error("PrimecoinMiner() : primorial increment overflow");
-   }
-   else if (primeStats.nPrimorialMultiplier > 7)
-   {
-      if (!PrimeTableGetPreviousPrime((unsigned int) primeStats.nPrimorialMultiplier))
-         error("PrimecoinMiner() : primorial decrement overflow");
-   }
-}
-
-BYTE nRoundSievePercentage;
-bool bOptimalL1SearchInProgress = false;
-
-static void CacheAutoTuningWorkerThread(bool bEnabled)
-{
-
-   if (bOptimalL1SearchInProgress || !bEnabled)
-      return;
-
-   bOptimalL1SearchInProgress = true;
-
-   DWORD startTime = GetTickCount();	
-	unsigned int nL1CacheElementsStart = 64000;
-	unsigned int nL1CacheElementsMax   = 2560000;
-	unsigned int nL1CacheElementsIncrement = 64000;
-   BYTE nSampleSeconds = 20;
-
-   unsigned int nL1CacheElements = primeStats.nL1CacheElements;
-   std::map <unsigned int, unsigned int> mL1Stat;
-   std::map <unsigned int, unsigned int>::iterator mL1StatIter;
-   typedef std::pair <unsigned int, unsigned int> KeyVal;
-
-   primeStats.nL1CacheElements = nL1CacheElementsStart;
-
-   long nCounter = 0;
-   while (true && bEnabled && !appQuitSignal)
-   {		
-      primeStats.nWaveTime = 0;
-      primeStats.nWaveRound = 0;
-      primeStats.nTestTime = 0;
-      primeStats.nTestRound = 0;
-      Sleep(nSampleSeconds*1000);
-      DWORD waveTime = primeStats.nWaveTime;
-      if (bEnabled)
-         nCounter ++;
-      if (nCounter <=1) 
-         continue;// wait a litle at the beginning
-
-      nL1CacheElements = primeStats.nL1CacheElements;
-      mL1Stat.insert( KeyVal(primeStats.nL1CacheElements, primeStats.nWaveRound == 0 ? 0xFFFF : primeStats.nWaveTime / primeStats.nWaveRound));
-      if (nL1CacheElements < nL1CacheElementsMax)
-         primeStats.nL1CacheElements += nL1CacheElementsIncrement;
-      else
-      {
-         // set the best value
-         DWORD minWeveTime = mL1Stat.begin()->second;
-         unsigned int nOptimalSize = nL1CacheElementsStart;
-         for (  mL1StatIter = mL1Stat.begin(); mL1StatIter != mL1Stat.end(); mL1StatIter++ )
-         {
-            if (mL1StatIter->second < minWeveTime)
-            {
-               minWeveTime = mL1StatIter->second;
-               nOptimalSize = mL1StatIter->first;
-            }
-         }
-         printf("The optimal L1CacheElement size is: %u\n", nOptimalSize);
-         primeStats.nL1CacheElements = nOptimalSize;
-         nL1CacheElements = nOptimalSize;
-         bOptimalL1SearchInProgress = false;
-         break;
-      }			
-      printf("Auto Tuning in progress: %u %%\n", ((primeStats.nL1CacheElements  - nL1CacheElementsStart)*100) / (nL1CacheElementsMax - nL1CacheElementsStart));
-
-      float ratio = primeStats.nWaveTime == 0 ? 0 : ((float)primeStats.nWaveTime / (float)(primeStats.nWaveTime + primeStats.nTestTime)) * 100.0;
-      printf("WaveTime %u - Wave Round %u - L1CacheSize %u - TotalWaveTime: %u - TotalTestTime: %u - Ratio: %.01f / %.01f %%\n", 
-         primeStats.nWaveRound == 0 ? 0 : primeStats.nWaveTime / primeStats.nWaveRound, primeStats.nWaveRound, nL1CacheElements,
-         primeStats.nWaveTime, primeStats.nTestTime, ratio, 100.0 - ratio);
-
-   }
-}
-
-bool bEnablenPrimorialMultiplierTuning = true;
-
-static void RoundSieveAutoTuningWorkerThread(bool bEnabled)
-{
-   __try
-   {
-
-
-      // Auto Tuning for nPrimorialMultiplier
-      int nSampleSeconds = 15;
-
-		while ((true) && (1==0))
-      {
-         primeStats.nWaveTime = 0;
-         primeStats.nWaveRound = 0;
-         primeStats.nTestTime = 0;
-         primeStats.nTestRound = 0;
-         Sleep(nSampleSeconds*1000);
-
-         if (appQuitSignal)
-            return;
-
-         if (bOptimalL1SearchInProgress || !bEnablenPrimorialMultiplierTuning || !IsXptClientConnected())
-            continue;
-
-         float ratio = primeStats.nWaveTime == 0 ? 0 : ((float)primeStats.nWaveTime / (float)(primeStats.nWaveTime + primeStats.nTestTime)) * 100.0;
-         //printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-         //printf("WaveTime %u - Wave Round %u - L1CacheSize %u - TotalWaveTime: %u - TotalTestTime: %u - Ratio: %.01f / %.01f %%\n", 
-         //	primeStats.nWaveRound == 0 ? 0 : primeStats.nWaveTime / primeStats.nWaveRound, primeStats.nWaveRound, nL1CacheElements,
-         //	primeStats.nWaveTime, primeStats.nTestTime, ratio, 100.0 - ratio);
-         //printf( "PrimorialMultiplier: %u\n",  primeStats.nPrimorialMultiplier);
-         //printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-
-         if (ratio > nRoundSievePercentage + 5)
-         {
-            if (!PrimeTableGetNextPrime((unsigned int)  primeStats.nPrimorialMultiplier))
-               error("PrimecoinMiner() : primorial increment overflow");
-            printf( "Sieve/Test ratio: %.01f / %.01f %%  - New PrimorialMultiplier: %u\n", ratio, 100.0 - ratio,  primeStats.nPrimorialMultiplier);
-         }
-         else if (ratio < nRoundSievePercentage - 5)
-         {
-            if ( primeStats.nPrimorialMultiplier >= 2)
-            {
-               if (!PrimeTableGetPreviousPrime((unsigned int) primeStats.nPrimorialMultiplier))
-                  error("PrimecoinMiner() : primorial decrement overflow");
-               printf( "Sieve/Test ratio: %.01f / %.01f %%  - New PrimorialMultiplier: %u\n", ratio, 100.0 - ratio,  primeStats.nPrimorialMultiplier);
-            }
-         }
-      }
-   }
-   __except(EXCEPTION_EXECUTE_HANDLER)
-   {
-   }
-
-}
-
 void PrintCurrentSettings()
 {
    unsigned long uptime = (GetTickCount() - primeStats.startTime);
@@ -1025,17 +771,13 @@ void PrintCurrentSettings()
    unsigned int seconds = uptime / (1000);
 
    printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");	
-	printf("Worker name (-u): %s\n", commandlineInput.workername);
-	printf("Number of mining threads (-t): %u\n", commandlineInput.numThreads);
-	printf("Sieve Size (-s): %u\n", nMaxSieveSize);
-	printf("Sieve Percentage (-d): %u\n", nSievePercentage);
-	printf("Round Sieve Percentage (-r): %u\n", nRoundSievePercentage);
-	printf("Prime Limit (-primes): %u\n", commandlineInput.sievePrimeLimit);
-	printf("Primorial Multiplier (-m): %u\n", primeStats.nPrimorialMultiplier);
-	printf("L1CacheElements (-c): %u\n", primeStats.nL1CacheElements);	
-	printf("Chain Length Target (-target): %u\n", nOverrideTargetValue);	
-	printf("BiTwin Length Target (-bttarget): %u\n", nOverrideBTTargetValue);	
-	printf("Sieve Extensions (-se): %u\n", nSieveExtensions);	
+   printf("Worker name (-u): %s\n", commandlineInput.workername);
+   printf("Number of mining threads (-t): %u\n", commandlineInput.numThreads);
+   printf("Sieve Size (-s): %u\n", nMaxSieveSize);
+   printf("Primes Used (-d): %u\n", nMaxPrimes);
+   printf("Primorial Multiplier (-m): %u\n", primeStats.nPrimorialMultiplier);
+   printf("Chain Length Target (-target): %u\n", nOverrideTargetValue);	
+   printf("BiTwin Length Target (-bttarget): %u\n", nOverrideBTTargetValue);	
    printf("Total Runtime: %u Days, %u Hours, %u minutes, %u seconds\n", days, hours, minutes, seconds);	
    printf("Total Share Value submitted to the Pool: %.05f\n", primeStats.fTotalSubmittedShareValue);	
    printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n\n");
@@ -1068,27 +810,16 @@ static void input_thread()
             error("PrimecoinMiner() : primorial increment overflow");
          printf("Primorial Multiplier: %u\n", primeStats.nPrimorialMultiplier);
          break;
-      case 'p': case 'P':
-         bEnablenPrimorialMultiplierTuning = !bEnablenPrimorialMultiplierTuning;
-         printf("Primorial Multiplier Auto Tuning was %s.\n", bEnablenPrimorialMultiplierTuning ? "Enabled": "Disabled");
-         break;
-      case 'c': case 'C':
-         if (!bOptimalL1SearchInProgress)
-         {
-            CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)CacheAutoTuningWorkerThread, (LPVOID)true, 0, 0);
-            puts("Auto tunning for L1CacheElements size was started");
-         }
-         break;
       case 's': case 'S':			
          PrintCurrentSettings();
          break;
       case '+': case '=':
-         if (!bOptimalL1SearchInProgress && nMaxSieveSize < 10000000)
+         if (nMaxSieveSize < 10000000)
             nMaxSieveSize += 100000;
          printf("Sieve size: %u\n", nMaxSieveSize);
          break;
       case '-':
-         if (!bOptimalL1SearchInProgress && nMaxSieveSize > 100000)
+         if (nMaxSieveSize > 100000)
             nMaxSieveSize -= 100000;
          printf("Sieve size: %u\n", nMaxSieveSize);
          break;
@@ -1098,26 +829,26 @@ static void input_thread()
             switch (input)
             {
             case 72: // key up
-               if (!bOptimalL1SearchInProgress && nSievePercentage < 100)
-                  nSievePercentage ++;
-               printf("Sieve Percentage: %u%%\n", nSievePercentage);
+               if (nMaxPrimes < MAX_PRIMETABLE_SIZE)
+                  nMaxPrimes ++;
+               printf("Primes Used: %u%%\n", nMaxPrimes);
                break;
 
             case 80: // key down
-               if (!bOptimalL1SearchInProgress && nSievePercentage > 3)
-                  nSievePercentage --;
-               printf("Sieve Percentage: %u%%\n", nSievePercentage);
+               if (nMaxPrimes > 1000)
+                  nMaxPrimes --;
+               printf("Primes used: %u%%\n", nMaxPrimes);
                break;
 
             case 77:    // key right
-               if( nRoundSievePercentage < 98)
-                  nRoundSievePercentage++;
-               printf("Round Sieve Percentage: %u%%\n", nRoundSievePercentage);
+               if (nMaxPrimes < MAX_PRIMETABLE_SIZE) nMaxPrimes += 1000;
+               if (nMaxPrimes > MAX_PRIMETABLE_SIZE) nMaxPrimes = MAX_PRIMETABLE_SIZE;
+               printf("Primes Used: %u%%\n", nMaxPrimes);
                break;
             case 75:    // key left
-               if( nRoundSievePercentage > 2)
-                  nRoundSievePercentage--;
-               printf("Round Sieve Percentage: %u%%\n", nRoundSievePercentage);
+               if (nMaxPrimes > 1000) nMaxPrimes -= 1000;
+               if (nMaxPrimes < 1000) nMaxPrimes = 1000;
+               printf("Primes used: %u%%\n", nMaxPrimes);
                break;
             }
          }
@@ -1144,7 +875,7 @@ static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
       for (int i = 0; i < threadMap.size(); i++)
       {
          DWORD heartBeatTick = threadHearthBeat[i];
-				if (1 == 0 && (currentTick - heartBeatTick > maxIdelTime))
+         if (1 == 0 && (currentTick - heartBeatTick > maxIdelTime))
          {
             //restart the thread
             printf("Restarting thread %d\n", i);
@@ -1186,8 +917,8 @@ static void watchdog_thread(std::map<DWORD, HANDLE> threadMap)
 int jhMiner_main_xptMode()
 {
    // start the Auto Tuning thread
-   CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)CacheAutoTuningWorkerThread, (LPVOID)commandlineInput.enableCacheTunning, 0, 0);
-   CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)RoundSieveAutoTuningWorkerThread, NULL, 0, 0);
+   //CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)CacheAutoTuningWorkerThread, (LPVOID)commandlineInput.enableCacheTunning, 0, 0);
+   //CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)RoundSieveAutoTuningWorkerThread, NULL, 0, 0);
    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)input_thread, NULL, 0, 0);
 
 
@@ -1206,168 +937,176 @@ int jhMiner_main_xptMode()
 
 
    // main thread, don't query work, just wait and process
-   sint32 loopCounter = 0;
    uint32 xptWorkIdentifier = 0xFFFFFFFF;
-   uint32 time_multiAdjust = GetTickCount();
-   //unsigned long lastFiveChainCount = 0;
-   //unsigned long lastFourChainCount = 0;
    while( true )
    {
       if (appQuitSignal)
          return 0;
 
-      // calculate stats every ~30 seconds
-      if( loopCounter % 10 == 0 )
+      // Exit after 45 sec
+      //if ((double)(GetTickCount() - primeStats.startTime) > 45000) return 0;
+
+
+      xptClient_process(workData.xptClient);
+      char* disconnectReason = false;
+      if( workData.xptClient == NULL || xptClient_isDisconnected(workData.xptClient, &disconnectReason) )
       {
-         double totalRunTime = (double)(GetTickCount() - primeStats.startTime);
-         double statsPassedTime = (double)(GetTickCount() - primeStats.primeLastUpdate);
-         if( statsPassedTime < 1.0 )
-            statsPassedTime = 1.0; // avoid division by zero
-         double primesPerSecond = (double)primeStats.primeChainsFound / (statsPassedTime / 1000.0);
-         primeStats.primeLastUpdate = GetTickCount();
-         primeStats.primeChainsFound = 0;
-         float avgCandidatesPerRound = (double)primeStats.nCandidateCount / primeStats.nSieveRounds;
-         float sievesPerSecond = (double)primeStats.nSieveRounds / (statsPassedTime / 1000.0);
-         primeStats.primeLastUpdate = GetTickCount();
-         primeStats.nCandidateCount = 0;
-         primeStats.nSieveRounds = 0;
-         primeStats.primeChainsFound = 0;
-         uint32 bestDifficulty = primeStats.bestPrimeChainDifficulty;
-         primeStats.bestPrimeChainDifficulty = 0;
-         float primeDifficulty = GetChainDifficulty(bestDifficulty);
-         if( workData.workEntry[0].dataIsValid )
+         // disconnected, mark all data entries as invalid
+         for(uint32 i=0; i<128; i++)
+            workData.workEntry[i].dataIsValid = false;
+         printf("xpt: Disconnected, auto reconnect in 30 seconds\n");
+         if( workData.xptClient && disconnectReason )
+            printf("xpt: Disconnect reason: %s\n", disconnectReason);
+         Sleep(30*1000);
+         if( workData.xptClient )
+            xptClient_free(workData.xptClient);
+         xptWorkIdentifier = 0xFFFFFFFF;
+         while( true )
          {
-            statsPassedTime = (double)(GetTickCount() - primeStats.blockStartTime);
-            if( statsPassedTime < 1.0 )
-               statsPassedTime = 1.0; // avoid division by zero
-            primeStats.bestPrimeChainDifficultySinceLaunch = max(primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
-            //double sharesPerHour = ((double)valid_shares / totalRunTime) * 3600000.0;
-            float shareValuePerHour = primeStats.fShareValue / totalRunTime * 3600000.0;
-            //float fiveSharePerPeriod = ((double)(primeStats.chainCounter[0][5] - lastFiveChainCount) / statsPassedTime) * 3600000.0;
-            //float fourSharePerPeriod = ((double)(primeStats.chainCounter[0][4] - lastFourChainCount) / statsPassedTime) * 3600000.0;
-            //lastFiveChainCount = primeStats.chainCounter[0][5];
-            //lastFourChainCount = primeStats.chainCounter[0][4];
-            printf("\nVal/h:%8f - PPS:%d - S:%.03f - ACC:%d\n", shareValuePerHour, (sint32)primesPerSecond, sievesPerSecond, (sint32)avgCandidatesPerRound);
-            printf(" Chain/Hr: ");
-
-            for(int i=6; i<=10; i++)
-            {
-               printf("%2d: %8.02f ", i, ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0);
-            }
-            if (primeStats.bestPrimeChainDifficultySinceLaunch >= 11)
-            {
-               printf("\n           ");
-               for(int i=11; i<=15; i++)
-               {
-                  printf("%2d: %8.02f ", i, ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0);
-               }
-            }
-            printf("\n\n");
-            //printf(" - Best: %.04f - Max: %.04f\n", primeDifficulty, primeStats.bestPrimeChainDifficultySinceLaunch);
-         }
-      }
-      // wait and check some stats
-      uint32 time_updateWork = GetTickCount();
-      while( true )
-      {
-         uint32 tickCount = GetTickCount();
-         uint32 passedTime = tickCount - time_updateWork;
-
-
-         if (tickCount - time_multiAdjust >= 60000)
-         {
-            MultiplierAutoAdjust();
-            time_multiAdjust = GetTickCount();
-         }
-
-         //if(tickCount - time_AvarageCalc >= 5*60*1000)
-         //{
-         //	//calculate 5 minute avarages
-         //}
-
-         if( passedTime >= 4000 )
-            break;
-         xptClient_process(workData.xptClient);
-         char* disconnectReason = false;
-         if( workData.xptClient == NULL || xptClient_isDisconnected(workData.xptClient, &disconnectReason) )
-         {
-            // disconnected, mark all data entries as invalid
-            for(uint32 i=0; i<128; i++)
-               workData.workEntry[i].dataIsValid = false;
-            printf("xpt: Disconnected, auto reconnect in 30 seconds\n");
-            if( workData.xptClient && disconnectReason )
-               printf("xpt: Disconnect reason: %s\n", disconnectReason);
-            Sleep(30*1000);
+            workData.xptClient = xptClient_connect(&jsonRequestTarget, commandlineInput.numThreads);
             if( workData.xptClient )
-               xptClient_free(workData.xptClient);
-            xptWorkIdentifier = 0xFFFFFFFF;
-            while( true )
-            {
-               workData.xptClient = xptClient_connect(&jsonRequestTarget, commandlineInput.numThreads);
-               if( workData.xptClient )
-                  break;
-            }
+               break;
          }
-         // has the block data changed?
-         if( workData.xptClient && xptWorkIdentifier != workData.xptClient->workDataCounter )
-         {
-            // printf("New work\n");
-            xptWorkIdentifier = workData.xptClient->workDataCounter;
-            for(uint32 i=0; i<workData.xptClient->payloadNum; i++)
-            {
-               uint8 blockData[256];
-               memset(blockData, 0x00, sizeof(blockData));
-               *(uint32*)(blockData+0) = workData.xptClient->blockWorkInfo.version;
-               memcpy(blockData+4, workData.xptClient->blockWorkInfo.prevBlock, 32);
-               memcpy(blockData+36, workData.xptClient->workData[i].merkleRoot, 32);
-               *(uint32*)(blockData+68) = workData.xptClient->blockWorkInfo.nTime;
-               *(uint32*)(blockData+72) = workData.xptClient->blockWorkInfo.nBits;
-               *(uint32*)(blockData+76) = 0; // nonce
-               memcpy(workData.workEntry[i].data, blockData, 80);
-               ((serverData_t*)workData.workEntry[i].serverData)->blockHeight = workData.xptClient->blockWorkInfo.height;
-               ((serverData_t*)workData.workEntry[i].serverData)->nBitsForShare = workData.xptClient->blockWorkInfo.nBitsShare;
-
-               // is the data really valid?
-               if( workData.xptClient->blockWorkInfo.nTime > 0 )
-                  workData.workEntry[i].dataIsValid = true;
-               else
-                  workData.workEntry[i].dataIsValid = false;
-            }
-            if (workData.xptClient->blockWorkInfo.height > 0)
-            {
-               double totalRunTime = (double)(GetTickCount() - primeStats.startTime);
-               double statsPassedTime = (double)(GetTickCount() - primeStats.primeLastUpdate);
-               if( statsPassedTime < 1.0 ) statsPassedTime = 1.0; // avoid division by zero
-               double poolDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBitsShare);
-               double blockDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBits);
-               printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-               printf("New Block: %u - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
-               printf("Total/Valid shares: [ %d / %d ]  -  Max diff: %.06f\n", total_shares,valid_shares, primeStats.bestPrimeChainDifficultySinceLaunch);
-               statsPassedTime = (double)(GetTickCount() - primeStats.blockStartTime);
-               if( statsPassedTime < 1.0 ) statsPassedTime = 1.0; // avoid division by zero
-               for (int i = 6; i <= max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++)
-               {
-                  double sharePerHour = ((double)primeStats.chainCounter[0][i] / statsPassedTime) * 3600000.0;
-                  printf("%2dch/h: %8.02f - %u [ %u / %u / %u ]\n", // - Val: %0.06f\n", 
-                     i, sharePerHour, 
-                     primeStats.chainCounter[0][i],
-                     primeStats.chainCounter[1][i],
-                     primeStats.chainCounter[2][i],
-                     primeStats.chainCounter[3][i]//, 
-                  //(double)primeStats.chainCounter[0][i] * GetValueOfShareMajor(i)
-                  );
-               }
-               printf("Share Value submitted - Last Block/Total: %0.6f / %0.6f\n", primeStats.fBlockShareValue, primeStats.fTotalSubmittedShareValue);
-               printf("Current Primorial Value: %u\n", primeStats.nPrimorialMultiplier);
-               printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-
-               primeStats.fBlockShareValue = 0;
-               multiplierSet.clear();
-            }
-         }
-         Sleep(10);
       }
-      loopCounter++;
+      // has the block data changed?
+      if( workData.xptClient && xptWorkIdentifier != workData.xptClient->workDataCounter )
+      {
+         // printf("New work\n");
+         xptWorkIdentifier = workData.xptClient->workDataCounter;
+         for(uint32 i=0; i<workData.xptClient->payloadNum; i++)
+         {
+            uint8 blockData[256];
+            memset(blockData, 0x00, sizeof(blockData));
+            *(uint32*)(blockData+0) = workData.xptClient->blockWorkInfo.version;
+            memcpy(blockData+4, workData.xptClient->blockWorkInfo.prevBlock, 32);
+            memcpy(blockData+36, workData.xptClient->workData[i].merkleRoot, 32);
+            *(uint32*)(blockData+68) = workData.xptClient->blockWorkInfo.nTime;
+            *(uint32*)(blockData+72) = workData.xptClient->blockWorkInfo.nBits;
+            *(uint32*)(blockData+76) = 0; // nonce
+            memcpy(workData.workEntry[i].data, blockData, 80);
+            ((serverData_t*)workData.workEntry[i].serverData)->blockHeight = workData.xptClient->blockWorkInfo.height;
+            ((serverData_t*)workData.workEntry[i].serverData)->nBitsForShare = workData.xptClient->blockWorkInfo.nBitsShare;
+
+            // is the data really valid?
+            if( workData.xptClient->blockWorkInfo.nTime > 0 )
+               workData.workEntry[i].dataIsValid = true;
+            else
+               workData.workEntry[i].dataIsValid = false;
+         }
+         if (workData.xptClient->blockWorkInfo.height > 0)
+         {
+            const unsigned long reportTime = GetTickCount();
+            double totalRunTime = (double)(reportTime - primeStats.startTime);
+            double blockPassedTime = (double)(reportTime - primeStats.blockStartTime);
+            if( blockPassedTime < 1.0 ) blockPassedTime = 1.0; // avoid division by zero
+            double poolDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBitsShare);
+            double blockDiff = GetPrimeDifficulty( workData.xptClient->blockWorkInfo.nBits);
+            double primesPerSecond = (double)primeStats.primeChainsFound / (blockPassedTime / 1000.0);
+            float shareValuePerHour = primeStats.fShareValue / totalRunTime * 3600000.0;
+            float avgCandidatesPerRound = (double)primeStats.nCandidateCount / ((primeStats.nSieveRounds > 0) ? primeStats.nSieveRounds : 1);
+            float weavesPerSecond = (double)primeStats.nSieveRounds / (blockPassedTime / 1000.0);
+            float primeDifficulty = GetChainDifficulty(primeStats.bestPrimeChainDifficulty);
+            double numsTestedPerSecond = ((double)nMaxSieveSize / 2) * primeStats.nSieveLayers * weavesPerSecond;
+
+            primeStats.bestPrimeChainDifficultySinceLaunch = max(primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
+            printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
+            printf("New Block: %u - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
+            printf("Total/Valid shares: [ %d / %d ]  -  Best/Max diff: [ %.06f / %.06f ]\n", total_shares,valid_shares, primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
+            printf("Share Value - Total/Per Hour/Last Block: %0.6f / %0.6f / %0.6f\n", primeStats.fTotalSubmittedShareValue, shareValuePerHour, primeStats.fBlockShareValue);
+            for (int i = 6; i <= max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++)
+            {
+               double sharePerHour = ((double)primeStats.chainCounter[0][i] / totalRunTime) * 3600000.0;
+               printf("%2dch/h: %8.02f - %u [ %u / %u / %u ]\n", // - Val: %0.06f\n", 
+                  i, sharePerHour, 
+                  primeStats.chainCounter[0][i],
+                  primeStats.chainCounter[1][i],
+                  primeStats.chainCounter[2][i],
+                  primeStats.chainCounter[3][i]//, 
+               //(double)primeStats.chainCounter[0][i] * GetValueOfShareMajor(i)
+               );
+            }
+            printf("Current Primorial: %u - Sieve Size: %u - Primes In Weave: %u\n", primeStats.nPrimorialMultiplier, nMaxSieveSize, nMaxPrimes);
+            printf("NPS:%-12d PPS:%-12d WPS:%-8.03f ACC:%-8d\n", (sint32)numsTestedPerSecond, (sint32)primesPerSecond, weavesPerSecond, (sint32)avgCandidatesPerRound);
+
+            // Reset all the prime stats
+            primeStats.blockStartTime = GetTickCount();
+            primeStats.bestPrimeChainDifficulty = 0;
+            primeStats.primeChainsFound = 0;
+            primeStats.fBlockShareValue = 0;
+            primeStats.nCandidateCount = 0;
+            primeStats.nSieveRounds = 0;
+            multiplierSet.clear();
+
+            // Perform adjustments to boost speed.
+            if (blockPassedTime >= 10000)
+            {
+               if (numsTestedPerSecond > primeStats.nBestNumbersTestedPerSecond)
+               {
+                  if (primeStats.nBestNumbersTestedPerSecond > 0) printf("New Best results recorded! - ");
+                  primeStats.nBestNumbersTestedPerSecond = numsTestedPerSecond;
+                  primeStats.nBestPrimorialMultiplier = primeStats.nPrimorialMultiplier;
+                  primeStats.nBestPrimeCount = nMaxPrimes;
+                  primeStats.nBestSieveSize = nMaxSieveSize;
+               }
+
+               if (numsTestedPerSecond > (primeStats.nLastNumbersTestedPerSecond * 0.95f))// ignore up to a 5% slowdown as "variance"
+               {
+                  if (numsTestedPerSecond > primeStats.nLastNumbersTestedPerSecond)
+                  {
+                     primeStats.nLastNumbersTestedPerSecond = numsTestedPerSecond; 
+                  }
+
+                  if (primeStats.nAdjustmentType)
+                  {
+                     nMaxSieveSize += (primeStats.nSieveAdjustmentAmount * primeStats.nAdjustmentsMode);
+                     if (nMaxSieveSize < 1000) nMaxSieveSize = 1000;
+                     printf("New Sieve Size: %u", nMaxSieveSize);
+                  }
+                  else
+                  {
+                     nMaxPrimes += (primeStats.nPrimesAdjustmentAmount * primeStats.nAdjustmentsMode);
+                     if (nMaxPrimes > MAX_PRIMETABLE_SIZE) nMaxPrimes = MAX_PRIMETABLE_SIZE;
+                     if (nMaxPrimes < 1000) nMaxPrimes = 1000;
+                     printf("New Primes Count: %u", nMaxPrimes);
+                  }
+               }
+               else
+               {
+                  primeStats.nLastNumbersTestedPerSecond = 0;
+                  primeStats.nBestNumbersTestedPerSecond = 0; // Debateable
+                  primeStats.nPrimorialMultiplier = primeStats.nBestPrimorialMultiplier;
+                  nMaxPrimes = primeStats.nBestPrimeCount;
+                  nMaxSieveSize = primeStats.nBestSieveSize;
+                  primeStats.nAdjustmentsMode *= -1;
+                  if (primeStats.nAdjustmentsMode > 0)
+                  {
+                     if (primeStats.nAdjustmentType)
+                     {
+                        if (primeStats.nSieveAdjustmentAmount > 1000)
+                        {
+                           primeStats.nSieveAdjustmentAmount = (ceil((primeStats.nSieveAdjustmentAmount * 0.50f)/1000) * 1000);
+                           if (primeStats.nSieveAdjustmentAmount < 1000) primeStats.nSieveAdjustmentAmount = 1000;
+                        }
+                     }
+                     else
+                     {
+                        if (primeStats.nPrimesAdjustmentAmount > 1)
+                        {
+                           primeStats.nPrimesAdjustmentAmount *= 0.50f;
+                           if (primeStats.nPrimesAdjustmentAmount < 1) primeStats.nPrimesAdjustmentAmount = 1;
+                        }
+                     }
+                     primeStats.nAdjustmentType = (primeStats.nAdjustmentType == 0) ? 1 : 0; // Switch adjustment mode.
+                  }
+                  printf("Resetting Parameters to previous bests. Sieve Size: %u - Prime Count: %u", nMaxSieveSize, nMaxPrimes);
+               }
+               printf("\n");
+            }
+            printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
+
+         }
+      }
+      Sleep(10);
    }
 
    return 0;
@@ -1381,42 +1120,20 @@ int main(int argc, char **argv)
    GetSystemInfo( &sysinfo );
    commandlineInput.numThreads = sysinfo.dwNumberOfProcessors;
    commandlineInput.numThreads = max(commandlineInput.numThreads, 1);
-	commandlineInput.sieveSize = 1024000; // default maxSieveSize
-   commandlineInput.sievePercentage = 10; // default 
-   commandlineInput.roundSievePercentage = 70; // default 
-   commandlineInput.enableCacheTunning = false;
-   commandlineInput.L1CacheElements = 22400;
-   commandlineInput.primorialMultiplier = 0; // for default 0 we will swithc aouto tune on
+   commandlineInput.sieveSize = 1024000; // default maxSieveSize
+   commandlineInput.numPrimes = 25000; // default 
+   commandlineInput.primorialMultiplier = 41; // for default we use 41
    commandlineInput.targetOverride = 0;
    commandlineInput.targetBTOverride = 0;
-   commandlineInput.initialPrimorial = 41;
    commandlineInput.printDebug = 0;
-	commandlineInput.sieveExtensions = -1; // Calculate based on target difficulty
 
-   commandlineInput.sievePrimeLimit = 0;
    // parse command lines
    jhMiner_parseCommandline(argc, argv);
    // Sets max sieve size
    nMaxSieveSize = commandlineInput.sieveSize;
-   nSievePercentage = commandlineInput.sievePercentage;
-   nRoundSievePercentage = commandlineInput.roundSievePercentage;
+   nMaxPrimes = commandlineInput.numPrimes;
    nOverrideTargetValue = commandlineInput.targetOverride;
    nOverrideBTTargetValue = commandlineInput.targetBTOverride;
-	nSieveExtensions = commandlineInput.sieveExtensions;
-   if (commandlineInput.sievePrimeLimit == 0) //default before parsing 
-      commandlineInput.sievePrimeLimit = commandlineInput.sieveSize;  //default is sieveSize 
-   primeStats.nL1CacheElements = commandlineInput.L1CacheElements;
-
-   if(commandlineInput.primorialMultiplier == 0)
-   {
-      primeStats.nPrimorialMultiplier = 37;
-      bEnablenPrimorialMultiplierTuning = true;
-   }
-   else
-   {
-      primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;
-      bEnablenPrimorialMultiplierTuning = false;
-   }
 
    if( commandlineInput.host == NULL )
    {
@@ -1428,8 +1145,7 @@ int main(int argc, char **argv)
 
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v3.2beta                   \xBA\n");
-   printf("\xBA     optimised from hg5fm (mumus) v7.1 build + HP10 updates    \xBA\n");
+   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v4.0beta                   \xBA\n");
    printf("\xBA  author: JH (http://ypool.net)                                \xBA\n");
    printf("\xBA  contributors: x3maniac                                       \xBA\n");
    printf("\xBA  Credits: Sunny King for the original Primecoin client&miner  \xBA\n");
@@ -1448,8 +1164,8 @@ int main(int argc, char **argv)
    if( pctx == NULL )
       pctx = BN_CTX_new();
    // init prime table
-   GeneratePrimeTable(commandlineInput.sievePrimeLimit);
-   printf("Sieve Percentage: %u %%\n", nSievePercentage);
+   GeneratePrimeTable(MAX_PRIMETABLE_SIZE);
+   printf("Primes Used: %u %%\n", nMaxPrimes);
    // init winsock
    WSADATA wsa;
    WSAStartup(MAKEWORD(2,2),&wsa);
@@ -1488,7 +1204,7 @@ int main(int argc, char **argv)
    //lastBlockCount = queryLocalPrimecoindBlockCount(useLocalPrimecoindForLongpoll);
 
    // init stats
-   primeStats.primeLastUpdate = primeStats.blockStartTime = primeStats.startTime = GetTickCount();
+   primeStats.blockStartTime = primeStats.startTime = GetTickCount();
    primeStats.shareFound = false;
    primeStats.shareRejected = false;
    primeStats.primeChainsFound = 0;
@@ -1503,10 +1219,11 @@ int main(int argc, char **argv)
    primeStats.fShareValue = 0;
    primeStats.fBlockShareValue = 0;
    primeStats.fTotalSubmittedShareValue = 0;
-   primeStats.nPrimorialMultiplier = commandlineInput.initialPrimorial;
-   primeStats.nWaveTime = 0;
-   primeStats.nWaveRound = 0;
-   //primeStats.nL1CacheElements = 256000;
+   primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;
+   primeStats.nAdjustmentsMode = 1; // Start with positive adjustments.
+   primeStats.nAdjustmentType = 1; // Start with Sieve Size.
+   primeStats.nPrimesAdjustmentAmount = nMaxPrimes * 0.1f; // Start adjustments at 10%
+   primeStats.nSieveAdjustmentAmount = nMaxSieveSize * 0.1f; // Start adjustments at 10%
 
    // setup thread count and print info
    printf("Using %d threads\n", commandlineInput.numThreads);
@@ -1577,22 +1294,20 @@ int main(int argc, char **argv)
       }
    }
 
-   printf("\nVal/h = 'Share Value per Hour', PPS = 'Primes per Second', \n");
-   printf("SPS = 'Sieves per Second', ACC = 'Avg. Candidate Count / Sieve' \n");
+   printf("\nNPS = 'Numbers tested per Second', PPS = 'Primes per Second', \n");
+   printf("WPS = 'Weaves per Second', ACC = 'Avg. Candidate Count / Sieve' \n");
    printf("===============================================================\n");
    printf("Keyboard shortcuts:\n");
    printf("   <Ctrl-C>, <Q>     - Quit\n");
-   printf("   <Up arrow key>    - Increment Sieve Percentage\n");
-   printf("   <Down arrow key>  - Decrement Sieve Percentage\n");
-   printf("   <Left arrow key>  - Decrement Round Sieve Percentage\n");
-   printf("   <Right arrow key> - Increment Round Sieve Percentage\n");
-   printf("   <P> - Enable/Disable Round Sieve Percentage Auto Tuning\n");
+   printf("   <Up arrow key>    - Increment Prime Count by 1\n");
+   printf("   <Down arrow key>  - Decrement Prime Count by 1\n");
+   printf("   <Left arrow key>  - Decrement Prime Count by 1000\n");
+   printf("   <Right arrow key> - Increment Prime Count by 1000\n");
    printf("   <S> - Print current settings\n");
    printf("   <[> - Decrement Primorial Multiplier\n");
    printf("   <]> - Increment Primorial Multiplier\n");
-   printf("   <-> - Decrement Sive size\n");
+   printf("   <-> - Decrement Sieve size\n");
    printf("   <+> - Increment Sieve size\n");
-   printf("Note: While the initial auto tuning is in progress several values cannot be changed.\n");
 
 
    // enter different mainloops depending on protocol mode
