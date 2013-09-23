@@ -12,6 +12,7 @@ volatile int valid_shares = 0;
 unsigned int nMaxSieveSize;
 unsigned int nMaxPrimes;
 bool nPrintDebugMessages;
+bool nEnableAutoTune;
 unsigned long nOverrideTargetValue;
 unsigned int nOverrideBTTargetValue;
 char* dt;
@@ -508,6 +509,7 @@ typedef struct
    sint32 targetOverride;
    sint32 targetBTOverride;
    bool printDebug;
+   bool enableAutoTune;
 }commandlineInput_t;
 
 commandlineInput_t commandlineInput = {0};
@@ -527,12 +529,10 @@ void jhMiner_printHelp()
    puts("   -d <num>                      Set Number of primes to weave with - range from 1000 - 250000");
    puts("                                     Default is 15 and it's not recommended to use lower values than 8.");
    puts("                                     It limits how many base primes are used to filter out candidate multipliers in the sieve.");
-   puts("   -r <num>                      Set RoundSievePercentage - range from 3 - 97");
-   puts("                                     The parameter determines how much time is spent running the sieve.");
-   puts("                                     By default 80% of time is spent in the sieve and 20% is spent on checking the candidates produced by the sieve");
+   puts("   -tune <flag>                  Set a flag to control the auto tune functions");
 
    puts("Example usage:");
-   puts("   jhPrimeminer.exe -o http://poolurl.com:8332 -u workername.1 -p workerpass -t 4");
+   puts("   jhPrimeminer.exe -o http://www.ypool.net:10034 -u workername.1 -p workerpass");
    puts("Press any key to continue...");
    _getch();
 }
@@ -682,6 +682,22 @@ void jhMiner_parseCommandline(int argc, char **argv)
          }
          cIdx++;
       }
+      else if( memcmp(argument, "-tune", 5)==0 )
+      {
+         // -tune
+         if( cIdx >= argc )
+         {
+            printf("Missing flag after -tune option\n");
+            ExitProcess(0);
+         }
+         commandlineInput.enableAutoTune = atoi(argv[cIdx]);
+         if( commandlineInput.enableAutoTune < 0 || commandlineInput.enableAutoTune > 1 )
+         {
+            printf("-tune parameter out of range, must be between 0 - 1");
+            ExitProcess(0);
+         }
+         cIdx++;
+      }
       else if( memcmp(argument, "-debug", 6)==0 )
       {
          // -debug
@@ -710,6 +726,19 @@ void jhMiner_parseCommandline(int argc, char **argv)
       jhMiner_printHelp();
       ExitProcess(0);
    }
+}
+
+void ResetAutoTuner()
+{
+   primeStats.bAutoTuneComplete = false; // Auto tune is not finished.
+   primeStats.bEnablePrimeTuning = true; // Enable Prime Tuner
+   primeStats.bEnableSieveTuning = true; // Enable Sieve Tuner
+   primeStats.nAdjustmentsMode = 1; // Start with positive adjustments.
+   primeStats.nAdjustmentType = 1; // Start with Sieve Size.
+   primeStats.nPrimesAdjustmentAmount = nMaxPrimes * 0.10f; // Start Prime adjustments at 10%
+   primeStats.nSieveAdjustmentAmount = nMaxSieveSize * 0.25f; // Start Sieve size adjustments at 25%
+   primeStats.nMaxPrimesAdjustedValue = primeStats.nMaxSieveAdjustedValue = 0;
+   primeStats.nMinPrimesAdjustedValue = primeStats.nMinSieveAdjustedValue = 0;
 }
 
 /*
@@ -812,6 +841,15 @@ static void input_thread()
          break;
       case 's': case 'S':			
          PrintCurrentSettings();
+         break;
+      case 't': case 'T':			
+         nEnableAutoTune = !nEnableAutoTune;
+         if (nEnableAutoTune)
+         {
+            // Reset tuning params.
+            ResetAutoTuner();
+         }
+         printf("Auto Tuner %s\n", (nEnableAutoTune) ? "enabled" : "disabled");
          break;
       case '+': case '=':
          if (nMaxSieveSize < 10000000)
@@ -943,8 +981,8 @@ int jhMiner_main_xptMode()
       if (appQuitSignal)
          return 0;
 
-      // Exit after 45 sec
-      //if ((double)(GetTickCount() - primeStats.startTime) > 45000) return 0;
+      // Exit after 5 min
+      //if ((double)(GetTickCount() - primeStats.startTime) > 300000) return 0;
 
 
       xptClient_process(workData.xptClient);
@@ -1012,7 +1050,7 @@ int jhMiner_main_xptMode()
             printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
             printf("New Block: %u - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
             printf("Total/Valid shares: [ %d / %d ]  -  Best/Max diff: [ %.06f / %.06f ]\n", total_shares,valid_shares, primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
-            printf("Share Value - Total/Per Hour/Last Block: %0.6f / %0.6f / %0.6f\n", primeStats.fTotalSubmittedShareValue, shareValuePerHour, primeStats.fBlockShareValue);
+            printf("Share Value - Total/Per Hour/Last Block: [ %0.6f / %0.6f / %0.6f ]\n", primeStats.fTotalSubmittedShareValue, shareValuePerHour, primeStats.fBlockShareValue);
             for (int i = 6; i <= max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++)
             {
                double sharePerHour = ((double)primeStats.chainCounter[0][i] / totalRunTime) * 3600000.0;
@@ -1025,8 +1063,8 @@ int jhMiner_main_xptMode()
                //(double)primeStats.chainCounter[0][i] * GetValueOfShareMajor(i)
                );
             }
-            printf("Current Primorial: %u - Sieve Size: %u - Primes In Weave: %u\n", primeStats.nPrimorialMultiplier, nMaxSieveSize, nMaxPrimes);
             printf("NPS:%-12d PPS:%-12d WPS:%-8.03f ACC:%-8d\n", (sint32)numsTestedPerSecond, (sint32)primesPerSecond, weavesPerSecond, (sint32)avgCandidatesPerRound);
+            printf("Current Primorial: %u - Sieve Size: %u - Prime Count: %u\n", primeStats.nPrimorialMultiplier, nMaxSieveSize, nMaxPrimes);
 
             // Reset all the prime stats
             primeStats.blockStartTime = GetTickCount();
@@ -1038,69 +1076,126 @@ int jhMiner_main_xptMode()
             multiplierSet.clear();
 
             // Perform adjustments to boost speed.
-            if (blockPassedTime >= 10000)
+            if ((blockPassedTime >= 10000) && (nEnableAutoTune))
             {
-               if (numsTestedPerSecond > primeStats.nBestNumbersTestedPerSecond)
+               if (primeStats.bAutoTuneComplete)
                {
-                  if (primeStats.nBestNumbersTestedPerSecond > 0) printf("New Best results recorded! - ");
-                  primeStats.nBestNumbersTestedPerSecond = numsTestedPerSecond;
-                  primeStats.nBestPrimorialMultiplier = primeStats.nPrimorialMultiplier;
-                  primeStats.nBestPrimeCount = nMaxPrimes;
-                  primeStats.nBestSieveSize = nMaxSieveSize;
-               }
-
-               if (numsTestedPerSecond > (primeStats.nLastNumbersTestedPerSecond * 0.95f))// ignore up to a 5% slowdown as "variance"
-               {
-                  if (numsTestedPerSecond > primeStats.nLastNumbersTestedPerSecond)
+                  if (primeStats.nBestNumbersTestedPerSecond > 0) 
                   {
-                     primeStats.nLastNumbersTestedPerSecond = numsTestedPerSecond; 
-                  }
-
-                  if (primeStats.nAdjustmentType)
-                  {
-                     nMaxSieveSize += (primeStats.nSieveAdjustmentAmount * primeStats.nAdjustmentsMode);
-                     if (nMaxSieveSize < 1000) nMaxSieveSize = 1000;
-                     printf("New Sieve Size: %u", nMaxSieveSize);
-                  }
-                  else
-                  {
-                     nMaxPrimes += (primeStats.nPrimesAdjustmentAmount * primeStats.nAdjustmentsMode);
-                     if (nMaxPrimes > MAX_PRIMETABLE_SIZE) nMaxPrimes = MAX_PRIMETABLE_SIZE;
-                     if (nMaxPrimes < 1000) nMaxPrimes = 1000;
-                     printf("New Primes Count: %u", nMaxPrimes);
+                     if ((abs((double)primeStats.nBestNumbersTestedPerSecond - numsTestedPerSecond)/ primeStats.nBestNumbersTestedPerSecond) > 0.65)
+                     {
+                        // Last block is more than 35% diff to recorded best, something about machine usage has changed.
+                        // Issue a new auto tune.
+                        ResetAutoTuner();
+                        printf("Large performance change detected, restarting auto tuner\n");
+                     }
                   }
                }
                else
                {
-                  primeStats.nLastNumbersTestedPerSecond = 0;
-                  primeStats.nBestNumbersTestedPerSecond = 0; // Debateable
-                  primeStats.nPrimorialMultiplier = primeStats.nBestPrimorialMultiplier;
-                  nMaxPrimes = primeStats.nBestPrimeCount;
-                  nMaxSieveSize = primeStats.nBestSieveSize;
-                  primeStats.nAdjustmentsMode *= -1;
-                  if (primeStats.nAdjustmentsMode > 0)
+                  if (numsTestedPerSecond > primeStats.nBestNumbersTestedPerSecond)
                   {
+                     if (primeStats.nBestNumbersTestedPerSecond > 0) printf("New Best results recorded! - ");
+                     primeStats.nBestNumbersTestedPerSecond = numsTestedPerSecond;
+                     primeStats.nBestPrimorialMultiplier = primeStats.nPrimorialMultiplier;
+                     primeStats.nBestPrimeCount = nMaxPrimes;
+                     primeStats.nBestSieveSize = nMaxSieveSize;
+                  }
+
+                  bool switchAdjustment = false;
+                  if (numsTestedPerSecond > (primeStats.nLastNumbersTestedPerSecond * 0.95f))// ignore up to a 5% slowdown as "variance"
+                  {
+                     if (numsTestedPerSecond > primeStats.nLastNumbersTestedPerSecond)
+                     {
+                        primeStats.nLastNumbersTestedPerSecond = numsTestedPerSecond; 
+                     }
+
                      if (primeStats.nAdjustmentType)
                      {
-                        if (primeStats.nSieveAdjustmentAmount > 1000)
+                        const unsigned int adjAmount = (primeStats.nSieveAdjustmentAmount * primeStats.nAdjustmentsMode);
+                        if (((primeStats.nMaxSieveAdjustedValue == 0) && primeStats.nMinSieveAdjustedValue == 0) || 
+                           ((nMaxSieveSize + adjAmount <= primeStats.nMaxSieveAdjustedValue) && (nMaxSieveSize + adjAmount >= primeStats.nMinSieveAdjustedValue)))
                         {
-                           primeStats.nSieveAdjustmentAmount = (ceil((primeStats.nSieveAdjustmentAmount * 0.50f)/1000) * 1000);
-                           if (primeStats.nSieveAdjustmentAmount < 1000) primeStats.nSieveAdjustmentAmount = 1000;
+                           nMaxSieveSize += adjAmount;
+                           if (nMaxSieveSize < 1000) nMaxSieveSize = 1000;
+                           printf("New Sieve Size: %u", nMaxSieveSize);
+                        }
+                        else
+                        {
+                           switchAdjustment = true;
                         }
                      }
                      else
                      {
-                        if (primeStats.nPrimesAdjustmentAmount > 1)
+                        const unsigned int adjAmount = (primeStats.nPrimesAdjustmentAmount * primeStats.nAdjustmentsMode);
+                        if (((primeStats.nMaxPrimesAdjustedValue == 0) && primeStats.nMinPrimesAdjustedValue == 0) || 
+                           ((nMaxPrimes + adjAmount <= primeStats.nMaxPrimesAdjustedValue) && (nMaxPrimes + adjAmount >= primeStats.nMinPrimesAdjustedValue)))
                         {
+                           nMaxPrimes += adjAmount;
+                           if (nMaxPrimes > MAX_PRIMETABLE_SIZE) nMaxPrimes = MAX_PRIMETABLE_SIZE;
+                           if (nMaxPrimes < 1000) nMaxPrimes = 1000;
+                           printf("New Primes Count: %u", nMaxPrimes);
+                        }
+                        else
+                        {
+                           switchAdjustment = true;
+                        }
+                     }
+                  }
+                  else
+                  {
+                     switchAdjustment = true;
+                  }
+
+                  if (switchAdjustment)
+                  {
+                     primeStats.nLastNumbersTestedPerSecond = 0;
+                     primeStats.nBestNumbersTestedPerSecond = 0; // Debateable
+                     primeStats.nPrimorialMultiplier = primeStats.nBestPrimorialMultiplier;
+                     nMaxPrimes = primeStats.nBestPrimeCount;
+                     nMaxSieveSize = primeStats.nBestSieveSize;
+                     printf("Resetting to previous best. Sieve Size: %u - Prime Count: %u", nMaxSieveSize, nMaxPrimes);
+                     primeStats.nAdjustmentsMode *= -1;
+                     if (primeStats.nAdjustmentsMode > 0)
+                     {
+                        if (primeStats.nAdjustmentType)
+                        {
+                           if (primeStats.nSieveAdjustmentAmount == 1000) primeStats.bEnableSieveTuning = false;
+                           const unsigned int oldAdjAmount = (2 * primeStats.nSieveAdjustmentAmount);
+                           primeStats.nMaxSieveAdjustedValue = nMaxSieveSize + oldAdjAmount;
+                           primeStats.nMinSieveAdjustedValue = nMaxSieveSize - oldAdjAmount;
+                           if (primeStats.nMinSieveAdjustedValue < 1000) primeStats.nMinSieveAdjustedValue = 1000;
+
+                           primeStats.nSieveAdjustmentAmount = (ceil((primeStats.nSieveAdjustmentAmount * 0.50f)/1000) * 1000);
+                           if (primeStats.nSieveAdjustmentAmount < 1000) primeStats.nSieveAdjustmentAmount = 1000;
+                        }
+                        else
+                        {
+                           if (primeStats.nPrimesAdjustmentAmount == 1) primeStats.bEnablePrimeTuning = false;
+                           const unsigned int oldAdjAmount = (2 * primeStats.nPrimesAdjustmentAmount);
+                           primeStats.nMaxPrimesAdjustedValue = nMaxPrimes + oldAdjAmount;
+                           primeStats.nMinPrimesAdjustedValue = nMaxPrimes - oldAdjAmount;
+                           if (primeStats.nMaxPrimesAdjustedValue > MAX_PRIMETABLE_SIZE) primeStats.nMaxPrimesAdjustedValue = MAX_PRIMETABLE_SIZE;
+                           if (primeStats.nMinPrimesAdjustedValue < 1) primeStats.nMinPrimesAdjustedValue = 1;
+
                            primeStats.nPrimesAdjustmentAmount *= 0.50f;
                            if (primeStats.nPrimesAdjustmentAmount < 1) primeStats.nPrimesAdjustmentAmount = 1;
                         }
+                        if (primeStats.bEnablePrimeTuning == false && primeStats.bEnableSieveTuning == false)
+                        {
+                           primeStats.bAutoTuneComplete = true;
+                           printf("\nAuto tuning complete.");
+                        }
+                        else
+                        {
+                           primeStats.nAdjustmentType = (primeStats.nAdjustmentType == 0) ? 1 : 0; // Switch adjustment mode.
+                           if ((primeStats.nAdjustmentType) && (!primeStats.bEnableSieveTuning)) primeStats.nAdjustmentType = 0;
+                           if ((!primeStats.nAdjustmentType) && (!primeStats.bEnablePrimeTuning)) primeStats.nAdjustmentType = 1;
+                        }
                      }
-                     primeStats.nAdjustmentType = (primeStats.nAdjustmentType == 0) ? 1 : 0; // Switch adjustment mode.
                   }
-                  printf("Resetting Parameters to previous bests. Sieve Size: %u - Prime Count: %u", nMaxSieveSize, nMaxPrimes);
+                  printf("\n");
                }
-               printf("\n");
             }
             printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
 
@@ -1122,10 +1217,11 @@ int main(int argc, char **argv)
    commandlineInput.numThreads = max(commandlineInput.numThreads, 1);
    commandlineInput.sieveSize = 1024000; // default maxSieveSize
    commandlineInput.numPrimes = 25000; // default 
-   commandlineInput.primorialMultiplier = 41; // for default we use 41
+   commandlineInput.primorialMultiplier = 61; // for default we use 61
    commandlineInput.targetOverride = 0;
    commandlineInput.targetBTOverride = 0;
    commandlineInput.printDebug = 0;
+   commandlineInput.enableAutoTune = 1;
 
    // parse command lines
    jhMiner_parseCommandline(argc, argv);
@@ -1134,6 +1230,7 @@ int main(int argc, char **argv)
    nMaxPrimes = commandlineInput.numPrimes;
    nOverrideTargetValue = commandlineInput.targetOverride;
    nOverrideBTTargetValue = commandlineInput.targetBTOverride;
+   nEnableAutoTune = commandlineInput.enableAutoTune;
 
    if( commandlineInput.host == NULL )
    {
@@ -1145,9 +1242,9 @@ int main(int argc, char **argv)
 
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v4.0beta                   \xBA\n");
+   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v4.0a beta                 \xBA\n");
    printf("\xBA  author: JH (http://ypool.net)                                \xBA\n");
-   printf("\xBA  contributors: x3maniac                                       \xBA\n");
+   printf("\xBA                                                               \xBA\n");
    printf("\xBA  Credits: Sunny King for the original Primecoin client&miner  \xBA\n");
    printf("\xBA  Credits: mikaelh for the performance optimizations           \xBA\n");
    printf("\xBA                                                               \xBA\n");
@@ -1220,10 +1317,7 @@ int main(int argc, char **argv)
    primeStats.fBlockShareValue = 0;
    primeStats.fTotalSubmittedShareValue = 0;
    primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;
-   primeStats.nAdjustmentsMode = 1; // Start with positive adjustments.
-   primeStats.nAdjustmentType = 1; // Start with Sieve Size.
-   primeStats.nPrimesAdjustmentAmount = nMaxPrimes * 0.1f; // Start adjustments at 10%
-   primeStats.nSieveAdjustmentAmount = nMaxSieveSize * 0.1f; // Start adjustments at 10%
+   ResetAutoTuner();
 
    // setup thread count and print info
    printf("Using %d threads\n", commandlineInput.numThreads);
@@ -1294,8 +1388,8 @@ int main(int argc, char **argv)
       }
    }
 
-   printf("\nNPS = 'Numbers tested per Second', PPS = 'Primes per Second', \n");
-   printf("WPS = 'Weaves per Second', ACC = 'Avg. Candidate Count / Sieve' \n");
+   printf("\nNPS = 'Numbers tested per Second', PPS = 'Primes Per Second', \n");
+   printf("WPS = 'Weaves Per Second', ACC = 'Avg. Candidate Count per weave' \n");
    printf("===============================================================\n");
    printf("Keyboard shortcuts:\n");
    printf("   <Ctrl-C>, <Q>     - Quit\n");
@@ -1304,6 +1398,7 @@ int main(int argc, char **argv)
    printf("   <Left arrow key>  - Decrement Prime Count by 1000\n");
    printf("   <Right arrow key> - Increment Prime Count by 1000\n");
    printf("   <S> - Print current settings\n");
+   printf("   <T> - Enable/Disable Auto tuning\n");
    printf("   <[> - Decrement Primorial Multiplier\n");
    printf("   <]> - Increment Primorial Multiplier\n");
    printf("   <-> - Decrement Sieve size\n");

@@ -886,11 +886,11 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
       lSieveTarget = nOverrideTargetValue;
    else
    {
-/*      // sieve target not specified - set to lowest we can for shares.
+      /*      // sieve target not specified - set to lowest we can for shares.
       lSieveTarget = TargetGetLength(block->serverData.nBitsForShare);
       // Make sure its at least CC1 BTTarget + 2.
       if (lSieveTarget <= ((lSieveBTTarget + 3) / 2)) lSieveTarget++;
-*/
+      */
       lSieveTarget = lSieveBTTarget;
    }
 
@@ -1032,7 +1032,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
                }
             }
          }
-         printf("SHARE FOUND - DIFF:%8f - TYPE:%u - MINLEN:%u (%u) - MAXLEN: %u (%u)\n", GetChainDifficulty(nProbableChainLength), nCandidateType, minLengthMultiplier, (1 << minLengthMultiplier), maxLengthMultiplier, (1 << maxLengthMultiplier));
+         //printf("SHARE FOUND - DIFF:%8f - TYPE:%u - MINLEN:%u (%u) - MAXLEN: %u (%u)\n", GetChainDifficulty(nProbableChainLength), nCandidateType, minLengthMultiplier, (1 << minLengthMultiplier), maxLengthMultiplier, (1 << maxLengthMultiplier));
 
          for (int i = maxLengthMultiplier; i >= 0; i--)
          {
@@ -1083,8 +1083,11 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
             strftime (sNow, 80, "%x-%X",timeinfo);
 
             float shareDiff = GetChainDifficulty(block->serverData.client_shareBits);
-
-            printf("%s - SHARE FOUND! - (Th#:%2u) - DIFF:%8f - TYPE:%u", sNow, threadIndex, shareDiff, nCandidateType);
+#ifdef _DEBUG
+            printf("%s - SHARE FOUND! - (TH:SE:PG:%2u:%2u:%2u) - DIFF:%8.04f - TYPE:%u", sNow, threadIndex, nLayerMultiplier, nTriedMultiplier/nMaxSieveSize, shareDiff, nCandidateType);
+#else
+            printf("%s - SHARE FOUND! - (Th#:%2u) - DIFF:%8.05f - TYPE:%u", sNow, threadIndex, shareDiff, nCandidateType);
+#endif      
             if (nPrintDebugMessages)
             {
                printf("\nHashNum        : %s ", mpzHash.get_str(16).c_str());

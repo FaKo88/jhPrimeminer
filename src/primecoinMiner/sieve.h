@@ -57,11 +57,15 @@ class CSieveOfEratosthenes
    std::vector<std::vector<sieve_word_t>> vfCompositeCunningham2;
 
    // multipliers split into sieve segments.
-   std::vector<std::vector<primeMultiplier_t>> vfPrimeMultipliers;
-   std::vector<std::vector<std::vector<primeMultiplier_t*>>> vfExtendedPrimesToWeave;
-   std::vector<unsigned int> vfPrimeMultiplierCounters;
-   std::vector<unsigned int> vfPrimeMultiplierAutoWeaveCounters;
-   std::vector<std::vector<unsigned int>> vfExtendedPrimeCounters;
+   std::vector<std::vector<primeMultiplier_t>> vfCC1PrimeMultipliers;
+   std::vector<std::vector<primeMultiplier_t>> vfCC2PrimeMultipliers;
+   std::vector<std::vector<std::vector<primeMultiplier_t*>>> vfExtendedCC1PrimesToWeave;
+   std::vector<std::vector<std::vector<primeMultiplier_t*>>> vfExtendedCC2PrimesToWeave;
+   std::vector<unsigned int> vfCC1PrimeMultiplierCounters;
+   std::vector<unsigned int> vfCC2PrimeMultiplierCounters;
+   unsigned int nPrimeMultiplierAutoWeaveCounter;
+   std::vector<std::vector<unsigned int>> vfCC1ExtendedPrimeCounters;
+   std::vector<std::vector<unsigned int>> vfCC2ExtendedPrimeCounters;
 
    unsigned int GetCandidateWordNum(unsigned int nBitNum) {
       return nBitNum / nWordBits;
@@ -133,38 +137,65 @@ class CSieveOfEratosthenes
    }
 
 
-   void UpdateExtendedMultiplierList(const unsigned int currentMuliplierRound, const unsigned int nLayerNum, const unsigned int solvedMultiplier, primeMultiplier_t* primeMultiplier)
+   void UpdateCC1ExtendedMultiplierList(const unsigned int currentMuliplierRound, const unsigned int nLayerNum, const unsigned int solvedMultiplier, primeMultiplier_t* primeMultiplier)
    {
       const unsigned int lNumMultiplierRounds = this->nNumMultiplierRounds;
       const unsigned int lSieveSize = this->nSieveSize;
       const unsigned int multiplierPos = (currentMuliplierRound + (solvedMultiplier / lSieveSize)) % lNumMultiplierRounds;
-      const unsigned int extendedPrimeCount = vfExtendedPrimeCounters[nLayerNum][multiplierPos]++;
+      const unsigned int extendedPrimeCount = vfCC1ExtendedPrimeCounters[nLayerNum][multiplierPos]++;
 
-      if (extendedPrimeCount >= vfExtendedPrimesToWeave[nLayerNum][multiplierPos].size())
+      if (extendedPrimeCount >= vfExtendedCC1PrimesToWeave[nLayerNum][multiplierPos].size())
       {
-         vfExtendedPrimesToWeave[nLayerNum][multiplierPos].resize(extendedPrimeCount * 1.5);
+         vfExtendedCC1PrimesToWeave[nLayerNum][multiplierPos].resize(extendedPrimeCount * 1.5);
       }
-      vfExtendedPrimesToWeave[nLayerNum][multiplierPos][extendedPrimeCount] = &*primeMultiplier;
+      vfExtendedCC1PrimesToWeave[nLayerNum][multiplierPos][extendedPrimeCount] = &*primeMultiplier;
       primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
    }
 
-   void AddMultiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const bool isCunninghamChain1, const unsigned int nPrime, const unsigned int nSolvedMultiplier)
+   void UpdateCC2ExtendedMultiplierList(const unsigned int currentMuliplierRound, const unsigned int nLayerNum, const unsigned int solvedMultiplier, primeMultiplier_t* primeMultiplier)
+   {
+      const unsigned int lNumMultiplierRounds = this->nNumMultiplierRounds;
+      const unsigned int lSieveSize = this->nSieveSize;
+      const unsigned int multiplierPos = (currentMuliplierRound + (solvedMultiplier / lSieveSize)) % lNumMultiplierRounds;
+      const unsigned int extendedPrimeCount = vfCC2ExtendedPrimeCounters[nLayerNum][multiplierPos]++;
+
+      if (extendedPrimeCount >= vfExtendedCC2PrimesToWeave[nLayerNum][multiplierPos].size())
+      {
+         vfExtendedCC2PrimesToWeave[nLayerNum][multiplierPos].resize(extendedPrimeCount * 1.5);
+      }
+      vfExtendedCC2PrimesToWeave[nLayerNum][multiplierPos][extendedPrimeCount] = &*primeMultiplier;
+      primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
+   }
+
+   void AddCC1Multiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nPrime, const unsigned int nSolvedMultiplier)
    {
 #ifdef _DEBUG
       assert(nPrime < 0x7FFFFFFF);
 #endif
       const unsigned int lSieveSize = this->nSieveSize;
-      const unsigned int insertPos = vfPrimeMultiplierCounters[nLayerNum]++;
-      vfPrimeMultipliers[nLayerNum][insertPos].nMultiplierCandidate = nSolvedMultiplier;
-      vfPrimeMultipliers[nLayerNum][insertPos].nMultiplierBits = (isCunninghamChain1 ? (0x80000000) : 0) | nPrime;
+      const unsigned int insertPos = vfCC1PrimeMultiplierCounters[nLayerNum]++;
+      vfCC1PrimeMultipliers[nLayerNum][insertPos].nMultiplierCandidate = nSolvedMultiplier;
+      vfCC1PrimeMultipliers[nLayerNum][insertPos].nMultiplierBits = nPrime;
 
-      if (nPrime <= lSieveSize)
+      if (nPrime > lSieveSize)
       {
-         vfPrimeMultiplierAutoWeaveCounters[nLayerNum]++;
+         UpdateCC1ExtendedMultiplierList(nCurrentMuliplierRound, nLayerNum, nSolvedMultiplier, &vfCC1PrimeMultipliers[nLayerNum][insertPos]);
       }
-      else
+   }
+
+   void AddCC2Multiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nPrime, const unsigned int nSolvedMultiplier)
+   {
+#ifdef _DEBUG
+      assert(nPrime < 0x7FFFFFFF);
+#endif
+      const unsigned int lSieveSize = this->nSieveSize;
+      const unsigned int insertPos = vfCC2PrimeMultiplierCounters[nLayerNum]++;
+      vfCC2PrimeMultipliers[nLayerNum][insertPos].nMultiplierCandidate = nSolvedMultiplier;
+      vfCC2PrimeMultipliers[nLayerNum][insertPos].nMultiplierBits = nPrime;
+
+      if (nPrime > lSieveSize)
       {
-         UpdateExtendedMultiplierList(nCurrentMuliplierRound, nLayerNum, nSolvedMultiplier, &vfPrimeMultipliers[nLayerNum][insertPos]);
+         UpdateCC2ExtendedMultiplierList(nCurrentMuliplierRound, nLayerNum, nSolvedMultiplier, &vfCC2PrimeMultipliers[nLayerNum][insertPos]);
       }
    }
 
@@ -172,7 +203,8 @@ class CSieveOfEratosthenes
 
    //void ReUsePreviouslyWovenValues(const unsigned int layerSeq);
 
-   void ProcessPrimeMultiplier(primeMultiplier_t* multiplierToProcess, unsigned int& solvedMultiplier, unsigned int layerSeq);
+   void ProcessCC1PrimeMultiplier(primeMultiplier_t* multiplierToProcess, unsigned int& solvedMultiplier, unsigned int layerSeq);
+   void ProcessCC2PrimeMultiplier(primeMultiplier_t* multiplierToProcess, unsigned int& solvedMultiplier, unsigned int layerSeq);
 
    void Weave();
 
