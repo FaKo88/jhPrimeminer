@@ -1286,7 +1286,7 @@ int main(int argc, char **argv)
 
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v4.0b beta                 \xBA\n");
+   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v4.0c beta                 \xBA\n");
    printf("\xBA  author: JH (http://ypool.net)                                \xBA\n");
    printf("\xBA                                                               \xBA\n");
    printf("\xBA  Credits: Sunny King for the original Primecoin client&miner  \xBA\n");
