@@ -7,8 +7,6 @@
 
 
 primeStats_t primeStats = {0};
-volatile int total_shares = 0;
-volatile int valid_shares = 0;
 unsigned int nMaxSieveSize;
 unsigned int nMaxPrimes;
 bool nPrintDebugMessages;
@@ -213,8 +211,8 @@ bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlo
          jsonObject_t* jsonReturnValueBool = jsonObject_getParameter(jsonReturnValue, "result");
          if( jsonObject_isTrue(jsonReturnValueBool) )
          {
-            total_shares++;
-            valid_shares++;
+            primeStats.totalShares++;
+            primeStats.validShares++;
             time_t now = time(0);
             dt = ctime(&now);
             //printf("Valid share found!");
@@ -224,7 +222,7 @@ bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlo
          }
          else
          {
-            total_shares++;
+            primeStats.totalShares++;
             // the server says no to this share :(
             printf("Server rejected share (BlockHeight: %d/%d nBits: 0x%08X)\n", primecoinBlock->serverData.blockHeight, jhMiner_getCurrentWorkBlockHeight(primecoinBlock->threadIndex), primecoinBlock->serverData.client_shareBits);
             jsonObject_freeObject(jsonReturnValue);
@@ -741,6 +739,30 @@ void ResetAutoTuner()
    primeStats.nMaxPrimesAdjustmentAmount = primeStats.nMaxSieveAdjustmentAmount = 0;
 }
 
+void ResetPrimeStatistics()
+{
+   primeStats.blockStartTime = primeStats.startTime = GetTickCount();
+   primeStats.shareFound = false;
+   primeStats.shareRejected = false;
+   primeStats.nCandidateCount = 0;
+   primeStats.foundShareCount = 0;
+   for(int i = 0; i < sizeof(primeStats.chainCounter[0])/sizeof(uint32);  i++)
+   {
+      primeStats.chainCounter[0][i] = 0;
+      primeStats.chainCounter[1][i] = 0;
+      primeStats.chainCounter[2][i] = 0;
+      primeStats.chainCounter[3][i] = 0;
+   }
+   primeStats.validShares = 0;
+   primeStats.totalShares = 0;
+   primeStats.fShareValue = 0;
+   primeStats.fBlockShareValue = 0;
+   primeStats.fTotalSubmittedShareValue = 0;
+   primeStats.bestPrimeChainDifficulty = 0;
+   primeStats.bestPrimeChainDifficultySinceLaunch = 0;
+   primeStats.nSieveRounds = 0;
+}
+
 void PrintCurrentSettings()
 {
    unsigned long uptime = (GetTickCount() - primeStats.startTime);
@@ -761,6 +783,7 @@ void PrintCurrentSettings()
    printf("Primorial Multiplier (-m): %u\n", primeStats.nPrimorialMultiplier);
    printf("Chain Length Target (-target): %u\n", nOverrideTargetValue);	
    printf("BiTwin Length Target (-bttarget): %u\n", nOverrideBTTargetValue);	
+   printf("Auto Tune: %s\n", (primeStats.bEnablePrimeTuning) ? ((primeStats.bAutoTuneComplete) ? "enabled (Completed)" : "enabled (In Progress)" ) : "disabled");	
    printf("Total Runtime: %u Days, %u Hours, %u minutes, %u seconds\n", days, hours, minutes, seconds);	
    printf("Total Share Value submitted to the Pool: %.05f\n", primeStats.fTotalSubmittedShareValue);	
    printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n\n");
@@ -804,6 +827,10 @@ static void input_thread()
             ResetAutoTuner();
          }
          printf("Auto Tuner %s\n", (nEnableAutoTune) ? "enabled" : "disabled");
+         break;
+      case 'r': case 'R':			
+         ResetPrimeStatistics();
+         printf("All mining statistics reset.");
          break;
       case '+': case '=':
          if (nMaxSieveSize < 10000000)
@@ -1072,7 +1099,7 @@ int jhMiner_main_xptMode()
             primeStats.bestPrimeChainDifficultySinceLaunch = max(primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
             printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
             printf("%s - New Block: %u - Diff: %.06f / %.06f\n", sNow, workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
-            printf("Valid/Total shares: [ %d / %d ]  -  Best/Max diff: [ %.06f / %.06f ]\n",valid_shares, total_shares, primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
+            printf("Valid/Total shares: [ %d / %d ]  -  Best/Max diff: [ %.06f / %.06f ]\n",primeStats.validShares, primeStats.totalShares, primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
             printf("Share Value - Total/Per Hour/Last Block: [ %0.6f / %0.6f / %0.6f ]\n", primeStats.fTotalSubmittedShareValue, shareValuePerHour, primeStats.fBlockShareValue);
             for (int i = 6; i <= max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++)
             {
@@ -1318,22 +1345,8 @@ int main(int argc, char **argv)
    //lastBlockCount = queryLocalPrimecoindBlockCount(useLocalPrimecoindForLongpoll);
 
    // init stats
-   primeStats.blockStartTime = primeStats.startTime = GetTickCount();
-   primeStats.shareFound = false;
-   primeStats.shareRejected = false;
-   primeStats.nCandidateCount = 0;
-   primeStats.foundShareCount = 0;
-   for(int i = 0; i < sizeof(primeStats.chainCounter[0])/sizeof(uint32);  i++)
-   {
-      primeStats.chainCounter[0][i] = 0;
-      primeStats.chainCounter[1][i] = 0;
-      primeStats.chainCounter[2][i] = 0;
-      primeStats.chainCounter[3][i] = 0;
-   }
-   primeStats.fShareValue = 0;
-   primeStats.fBlockShareValue = 0;
-   primeStats.fTotalSubmittedShareValue = 0;
    primeStats.nPrimorialMultiplier = commandlineInput.primorialMultiplier;
+   ResetPrimeStatistics();
    ResetAutoTuner();
 
    // setup thread count and print info
@@ -1415,6 +1428,7 @@ int main(int argc, char **argv)
    printf("   <Left arrow key>  - Decrement Prime Count by 1000\n");
    printf("   <Right arrow key> - Increment Prime Count by 1000\n");
    printf("   <S> - Print current settings\n");
+   printf("   <R> - Reset all statistics\n");
    printf("   <T> - Enable/Disable Auto tuning\n");
    printf("   <[> - Decrement Primorial Multiplier\n");
    printf("   <]> - Increment Primorial Multiplier\n");

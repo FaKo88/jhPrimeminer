@@ -104,12 +104,12 @@ bool xptClient_processPacket_shareAck(xptClient_t* xptClient)
 		return false;
 	if( shareErrorCode == 0 )
 	{
-		total_shares++;
-		valid_shares++;
 		time_t now = time(0);
 		char* dt = ctime(&now);
 		//printf("Share accepted by server");
 		//printf(" [ %d / %d val: %.6f] %s", valid_shares, total_shares, shareValue, dt);
+      primeStats.totalShares++;
+      primeStats.validShares++;
       primeStats.fShareValue += shareValue;
       primeStats.fBlockShareValue += shareValue;
 		primeStats.fTotalSubmittedShareValue += shareValue;
@@ -117,7 +117,7 @@ bool xptClient_processPacket_shareAck(xptClient_t* xptClient)
 	else
 	{
 		// error logging in -> disconnect
-		total_shares++;
+      primeStats.totalShares++;
 		printf("Invalid share\n");
 		if( rejectReason[0] != '\0' )
 			printf("Reason: %s\n", rejectReason);
