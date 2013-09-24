@@ -519,7 +519,7 @@ void CSieveOfEratosthenes::Weave()
 
    // Increment current multiplier round.
    nCurrentMultiplierRoundPos += lRoundIncremental;
-   nCandidateLayer = nSieveChainLength - nChainLength;
+   nCandidateLayer = nSieveChainLength - nChainLength;//nBTCC2ChainLength;
    nCandidateMultiplier = 0;
 }
 
@@ -536,7 +536,7 @@ void CSieveOfEratosthenes::UpdateCandidateValues()
    const unsigned int lCandidateWords = this->nCandidatesWords;
    const unsigned int lBTCC1ChainLength = this->nBTCC1ChainLength;
    const unsigned int lBTCC2ChainLength = this->nBTCC2ChainLength;
-   const unsigned int lChainLength = this->nChainLength;
+   const unsigned int lChainLength = this->nChainLength;//min(this->nChainLength, (lSieveChainLength - lCandidateLayer));
    for (int layerSeq = 0; layerSeq < lChainLength; layerSeq++)
    {
       const unsigned int lCompositeIndex = (layerSeq + lCandidateLayer);
@@ -682,12 +682,12 @@ void CSieveOfEratosthenes::UpdateLastCandidatePrimality(const unsigned char nCC1
    const unsigned int lWordNum = GetCandidateWordNum(nCandidateMultiplier);
    const sieve_word_t lBitMask = GetCompositeBitMask(nCandidateMultiplier);
 
-   if ((nCC1Composite > 0) && ((nCandidateLayer + nCC1Composite - 1) > nSieveChainLength))
+   if ((nCC1Composite > 0) && ((nCandidateLayer + nCC1Composite - 1) < nSieveChainLength))
    {
       vfCompositeCunningham1[nCandidateLayer + nCC1Composite - 1][lWordNum] |= lBitMask;
    }
 
-   if ((nCC2Composite > 0) && ((nCandidateLayer + nCC2Composite - 1) > nSieveChainLength))
+   if ((nCC2Composite > 0) && ((nCandidateLayer + nCC2Composite - 1) < nSieveChainLength))
    {
       vfCompositeCunningham1[nCandidateLayer + nCC2Composite - 1][lWordNum] |= lBitMask;
    }

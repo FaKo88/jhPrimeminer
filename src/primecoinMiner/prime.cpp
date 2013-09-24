@@ -949,11 +949,11 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
       ProbablePrimeChainTestFast(mpzChainOrigin, testParams, lCC1Composite, lCC2Composite);
       nProbableChainLength = nChainLength;
 
-      if( nProbableChainLength > primeStats.bestPrimeChainDifficulty )
-         primeStats.bestPrimeChainDifficulty = nProbableChainLength;
-
       if(nProbableChainLength >= block->serverData.nBitsForShare)
       {
+         if( nProbableChainLength > primeStats.bestPrimeChainDifficulty )
+            primeStats.bestPrimeChainDifficulty = nProbableChainLength;
+
          block->mpzPrimeChainMultiplier = mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier);
 
          if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
