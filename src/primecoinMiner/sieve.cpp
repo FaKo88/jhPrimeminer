@@ -93,7 +93,8 @@ void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int numPrimes,
    this->nCandidatesWords = (nSieveSize + nWordBits - 1) / nWordBits;
    this->nCandidatesBytes = nCandidatesWords * sizeof(sieve_word_t);
    this->nCandidateMultiplier = this->nSieveSize; // Set to max value to force weave.
-   this->nCandidateLayer = this->nSieveChainLength; // Set to max value to force weave.
+   //this->nCandidateLayer = this->nSieveChainLength; // Set to max value to force weave.
+   this->nCandidateLayer = 0; // Set to min value to force weave.
 
    if (oldCandidateWords < nCandidatesWords)
    {
@@ -471,11 +472,11 @@ void CSieveOfEratosthenes::Weave()
          unsigned int solvedMultiplier;
          primeMultiplier = &vfCC1PrimeMultipliers[layerSeq][i];
          ProcessCC1PrimeMultiplier(primeMultiplier, solvedMultiplier, layerSeq);
-         primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
+         //primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
 
          primeMultiplier = &vfCC2PrimeMultipliers[layerSeq][i];
          ProcessCC2PrimeMultiplier(primeMultiplier, solvedMultiplier, layerSeq);
-         primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
+         //primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
       }
 
       // Weave the extended primes that affect the current bucket.
@@ -485,7 +486,7 @@ void CSieveOfEratosthenes::Weave()
          primeMultiplier = vfExtendedCC1PrimesToWeave[layerSeq][multiplierPos][i];
          unsigned int solvedMultiplier;
          ProcessCC1PrimeMultiplier(primeMultiplier, solvedMultiplier, layerSeq);
-         UpdateCC1ExtendedMultiplierList(multiplierPos, layerSeq, solvedMultiplier, primeMultiplier);
+         //UpdateCC1ExtendedMultiplierList(multiplierPos, layerSeq, solvedMultiplier, primeMultiplier);
       }
       const unsigned int numCC2ExtendedPrimeMultipliers = vfCC2ExtendedPrimeCounters[layerSeq][multiplierPos];
       for (int i = 0 ; i < numCC2ExtendedPrimeMultipliers; i++)
@@ -493,7 +494,7 @@ void CSieveOfEratosthenes::Weave()
          primeMultiplier = vfExtendedCC2PrimesToWeave[layerSeq][multiplierPos][i];
          unsigned int solvedMultiplier;
          ProcessCC2PrimeMultiplier(primeMultiplier, solvedMultiplier, layerSeq);
-         UpdateCC2ExtendedMultiplierList(multiplierPos, layerSeq, solvedMultiplier, primeMultiplier);
+         //UpdateCC2ExtendedMultiplierList(multiplierPos, layerSeq, solvedMultiplier, primeMultiplier);
       }
 
       // All multipliers dealt with for this round, clear layer counts.
@@ -518,7 +519,7 @@ void CSieveOfEratosthenes::Weave()
 
    // Increment current multiplier round.
    nCurrentMultiplierRoundPos += lRoundIncremental;
-   nCandidateLayer = 0;
+   nCandidateLayer = nSieveChainLength - nChainLength;
    nCandidateMultiplier = 0;
 }
 
@@ -584,9 +585,9 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
 
       if (nCandidateMultiplier >= nSieveSize) 
       {
-         nCandidateLayer++;
+         nCandidateLayer--;
          //if (nCandidateLayer > (nSieveChainLength - nChainLength))
-         if (nCandidateLayer > this->nSieveExtension)
+         if (nCandidateLayer < 0)
          {
             if (nCurrentMultiplierRoundPos >= 1) return false; //(vPrimes[this->nMaxWeaveMultiplier] - 1)) return false;//1) return false; // 
 
@@ -662,15 +663,32 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
          //printf("%u",nVariableMultiplier);
          nLayerMultiplier = nCandidateLayer;//(1UL << nCandidateLayer); // * (this->nCurrentWeaveMultiplier == 0 ? 1 : vPrimes[this->nCurrentWeaveMultiplier]); 
          if (vfCandidateBiTwin[lWordNum] & lBitMask)
-            nCandidateType = PRIME_CHAIN_BI_TWIN;
+            this->nCandidateMultiplierType = nCandidateType = PRIME_CHAIN_BI_TWIN;
          else if (vfCandidateCunningham1[lWordNum] & lBitMask)
-            nCandidateType = PRIME_CHAIN_CUNNINGHAM1;
+            this->nCandidateMultiplierType = nCandidateType = PRIME_CHAIN_CUNNINGHAM1;
          else
-            nCandidateType = PRIME_CHAIN_CUNNINGHAM2;
+            this->nCandidateMultiplierType = nCandidateType = PRIME_CHAIN_CUNNINGHAM2;
+
          return true;
       }
 
    }
 
    return true;
+}
+
+void CSieveOfEratosthenes::UpdateLastCandidatePrimality(const unsigned char nCC1Composite, const unsigned char nCC2Composite)
+{
+   const unsigned int lWordNum = GetCandidateWordNum(nCandidateMultiplier);
+   const sieve_word_t lBitMask = GetCompositeBitMask(nCandidateMultiplier);
+
+   if ((nCC1Composite > 0) && ((nCandidateLayer + nCC1Composite - 1) > nSieveChainLength))
+   {
+      vfCompositeCunningham1[nCandidateLayer + nCC1Composite - 1][lWordNum] |= lBitMask;
+   }
+
+   if ((nCC2Composite > 0) && ((nCandidateLayer + nCC2Composite - 1) > nSieveChainLength))
+   {
+      vfCompositeCunningham1[nCandidateLayer + nCC2Composite - 1][lWordNum] |= lBitMask;
+   }
 }

@@ -45,7 +45,8 @@ class CSieveOfEratosthenes
    unsigned int nCandidatesWords;
    unsigned int nCandidatesBytes;
    unsigned int nCandidateMultiplier; // current candidate for power test
-   unsigned int nCandidateLayer;
+   unsigned int nCandidateMultiplierType; // current candidate type for power test
+   int nCandidateLayer;
 
    // final set of candidates for probable primality checking
    std::vector<sieve_word_t> vfCandidates;
@@ -230,6 +231,8 @@ public:
    void Init(unsigned int nSieveSize, unsigned int numPrimes, unsigned int targetChainLength, unsigned int btTargetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier);
 
    bool GetNextCandidateMultiplier(unsigned int& nVariableMultiplier, unsigned int& nLayerMultiplier, unsigned int& nCandidateType);
+
+   void UpdateLastCandidatePrimality(const unsigned char nCC1Composite, const unsigned char nCC2Composite);
 
    //
    // Get total number of candidates for power test

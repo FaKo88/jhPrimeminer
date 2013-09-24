@@ -146,10 +146,8 @@ typedef struct
    volatile unsigned int nPrimesAdjustmentAmount;
    volatile unsigned int nSieveAdjustmentAmount;
    volatile unsigned int nAdjustmentType;
-   volatile unsigned int nMaxPrimesAdjustedValue;
-   volatile unsigned int nMinPrimesAdjustedValue;
-   volatile unsigned int nMaxSieveAdjustedValue;
-   volatile unsigned int nMinSieveAdjustedValue;
+   volatile unsigned int nMaxPrimesAdjustmentAmount;
+   volatile unsigned int nMaxSieveAdjustmentAmount;
 	volatile int nAdjustmentsMode;
    volatile bool bEnablePrimeTuning;
    volatile bool bEnableSieveTuning;

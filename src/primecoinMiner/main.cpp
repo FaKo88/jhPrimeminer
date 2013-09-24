@@ -734,11 +734,10 @@ void ResetAutoTuner()
    primeStats.bEnablePrimeTuning = true; // Enable Prime Tuner
    primeStats.bEnableSieveTuning = true; // Enable Sieve Tuner
    primeStats.nAdjustmentsMode = 1; // Start with positive adjustments.
-   primeStats.nAdjustmentType = 1; // Start with Sieve Size.
+   primeStats.nAdjustmentType = 0; // Start with Prime Count.
    primeStats.nPrimesAdjustmentAmount = nMaxPrimes * 0.10f; // Start Prime adjustments at 10%
    primeStats.nSieveAdjustmentAmount = nMaxSieveSize * 0.25f; // Start Sieve size adjustments at 25%
-   primeStats.nMaxPrimesAdjustedValue = primeStats.nMaxSieveAdjustedValue = 0;
-   primeStats.nMinPrimesAdjustedValue = primeStats.nMinSieveAdjustedValue = 0;
+   primeStats.nMaxPrimesAdjustmentAmount = primeStats.nMaxSieveAdjustmentAmount = 0;
 }
 
 /*
@@ -1046,9 +1045,15 @@ int jhMiner_main_xptMode()
             float primeDifficulty = GetChainDifficulty(primeStats.bestPrimeChainDifficulty);
             double numsTestedPerSecond = ((double)nMaxSieveSize / 2) * primeStats.nSieveLayers * weavesPerSecond;
 
+            time_t now = time(0);
+            struct tm * timeinfo;
+            timeinfo = localtime (&now);
+            char sNow [80];
+            strftime (sNow, 80, "%x-%X",timeinfo);
+
             primeStats.bestPrimeChainDifficultySinceLaunch = max(primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
             printf("\n\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
-            printf("New Block: %u - Diff: %.06f / %.06f\n", workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
+            printf("%s - New Block: %u - Diff: %.06f / %.06f\n", sNow, workData.xptClient->blockWorkInfo.height, blockDiff, poolDiff);
             printf("Total/Valid shares: [ %d / %d ]  -  Best/Max diff: [ %.06f / %.06f ]\n", total_shares,valid_shares, primeStats.bestPrimeChainDifficultySinceLaunch, primeDifficulty);
             printf("Share Value - Total/Per Hour/Last Block: [ %0.6f / %0.6f / %0.6f ]\n", primeStats.fTotalSubmittedShareValue, shareValuePerHour, primeStats.fBlockShareValue);
             for (int i = 6; i <= max(6,(int)primeStats.bestPrimeChainDifficultySinceLaunch); i++)
@@ -1112,9 +1117,10 @@ int jhMiner_main_xptMode()
 
                      if (primeStats.nAdjustmentType)
                      {
-                        const unsigned int adjAmount = (primeStats.nSieveAdjustmentAmount * primeStats.nAdjustmentsMode);
-                        if (((primeStats.nMaxSieveAdjustedValue == 0) && primeStats.nMinSieveAdjustedValue == 0) || 
-                           ((nMaxSieveSize + adjAmount <= primeStats.nMaxSieveAdjustedValue) && (nMaxSieveSize + adjAmount >= primeStats.nMinSieveAdjustedValue)))
+                        const int adjAmount = ((int)primeStats.nSieveAdjustmentAmount * primeStats.nAdjustmentsMode);
+                        const int totalAdjustment = abs((int)primeStats.nBestSieveSize - (int)(nMaxSieveSize + adjAmount));
+                        if (((primeStats.nMaxSieveAdjustmentAmount == 0) || (totalAdjustment <= primeStats.nMaxSieveAdjustmentAmount))
+                           && (nMaxSieveSize > 1000))
                         {
                            nMaxSieveSize += adjAmount;
                            if (nMaxSieveSize < 1000) nMaxSieveSize = 1000;
@@ -1127,9 +1133,10 @@ int jhMiner_main_xptMode()
                      }
                      else
                      {
-                        const unsigned int adjAmount = (primeStats.nPrimesAdjustmentAmount * primeStats.nAdjustmentsMode);
-                        if (((primeStats.nMaxPrimesAdjustedValue == 0) && primeStats.nMinPrimesAdjustedValue == 0) || 
-                           ((nMaxPrimes + adjAmount <= primeStats.nMaxPrimesAdjustedValue) && (nMaxPrimes + adjAmount >= primeStats.nMinPrimesAdjustedValue)))
+                        const int adjAmount = ((int)primeStats.nPrimesAdjustmentAmount * primeStats.nAdjustmentsMode);
+                        const int totalAdjustment = abs((int)primeStats.nBestPrimeCount - (int)(nMaxPrimes + adjAmount));
+                        if (((primeStats.nMaxPrimesAdjustmentAmount == 0) || (totalAdjustment <= primeStats.nMaxPrimesAdjustmentAmount))
+                           && ((nMaxPrimes > 1000) && (nMaxPrimes < MAX_PRIMETABLE_SIZE)))
                         {
                            nMaxPrimes += adjAmount;
                            if (nMaxPrimes > MAX_PRIMETABLE_SIZE) nMaxPrimes = MAX_PRIMETABLE_SIZE;
@@ -1161,10 +1168,7 @@ int jhMiner_main_xptMode()
                         if (primeStats.nAdjustmentType)
                         {
                            if (primeStats.nSieveAdjustmentAmount == 1000) primeStats.bEnableSieveTuning = false;
-                           const unsigned int oldAdjAmount = (2 * primeStats.nSieveAdjustmentAmount);
-                           primeStats.nMaxSieveAdjustedValue = nMaxSieveSize + oldAdjAmount;
-                           primeStats.nMinSieveAdjustedValue = nMaxSieveSize - oldAdjAmount;
-                           if (primeStats.nMinSieveAdjustedValue < 1000) primeStats.nMinSieveAdjustedValue = 1000;
+                           primeStats.nMaxSieveAdjustmentAmount = (2 * primeStats.nSieveAdjustmentAmount);
 
                            primeStats.nSieveAdjustmentAmount = (ceil((primeStats.nSieveAdjustmentAmount * 0.50f)/1000) * 1000);
                            if (primeStats.nSieveAdjustmentAmount < 1000) primeStats.nSieveAdjustmentAmount = 1000;
@@ -1172,11 +1176,7 @@ int jhMiner_main_xptMode()
                         else
                         {
                            if (primeStats.nPrimesAdjustmentAmount == 1) primeStats.bEnablePrimeTuning = false;
-                           const unsigned int oldAdjAmount = (2 * primeStats.nPrimesAdjustmentAmount);
-                           primeStats.nMaxPrimesAdjustedValue = nMaxPrimes + oldAdjAmount;
-                           primeStats.nMinPrimesAdjustedValue = nMaxPrimes - oldAdjAmount;
-                           if (primeStats.nMaxPrimesAdjustedValue > MAX_PRIMETABLE_SIZE) primeStats.nMaxPrimesAdjustedValue = MAX_PRIMETABLE_SIZE;
-                           if (primeStats.nMinPrimesAdjustedValue < 1) primeStats.nMinPrimesAdjustedValue = 1;
+                           primeStats.nMaxPrimesAdjustmentAmount = (2 * primeStats.nPrimesAdjustmentAmount);
 
                            primeStats.nPrimesAdjustmentAmount *= 0.50f;
                            if (primeStats.nPrimesAdjustmentAmount < 1) primeStats.nPrimesAdjustmentAmount = 1;
@@ -1242,7 +1242,7 @@ int main(int argc, char **argv)
 
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v4.0a beta                 \xBA\n");
+   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v4.0b beta                 \xBA\n");
    printf("\xBA  author: JH (http://ypool.net)                                \xBA\n");
    printf("\xBA                                                               \xBA\n");
    printf("\xBA  Credits: Sunny King for the original Primecoin client&miner  \xBA\n");
