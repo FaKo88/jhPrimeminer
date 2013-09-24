@@ -663,11 +663,11 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
          //printf("%u",nVariableMultiplier);
          nLayerMultiplier = nCandidateLayer;//(1UL << nCandidateLayer); // * (this->nCurrentWeaveMultiplier == 0 ? 1 : vPrimes[this->nCurrentWeaveMultiplier]); 
          if (vfCandidateBiTwin[lWordNum] & lBitMask)
-            this->nCandidateMultiplierType = nCandidateType = PRIME_CHAIN_BI_TWIN;
+            nCandidateType = PRIME_CHAIN_BI_TWIN;
          else if (vfCandidateCunningham1[lWordNum] & lBitMask)
-            this->nCandidateMultiplierType = nCandidateType = PRIME_CHAIN_CUNNINGHAM1;
+            nCandidateType = PRIME_CHAIN_CUNNINGHAM1;
          else
-            this->nCandidateMultiplierType = nCandidateType = PRIME_CHAIN_CUNNINGHAM2;
+            nCandidateType = PRIME_CHAIN_CUNNINGHAM2;
 
          return true;
       }

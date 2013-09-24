@@ -865,25 +865,14 @@ static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPr
 //boost::thread_specific_ptr<CSieveOfEratosthenes> psieve;
 
 // Mine probable prime chain of form: n = h * p# +/- 1
-bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* block, mpz_class& mpzFixedMultiplier, bool& fNewBlock, unsigned int& nProbableChainLength, 
-                            unsigned int& nTests, unsigned int& nPrimesHit, sint32 threadIndex, mpz_class& mpzHash, unsigned int nPrimorialMultiplier)
+bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* block, mpz_class& mpzFixedMultiplier, bool& fNewBlock, sint32 threadIndex, mpz_class& mpzHash, unsigned int nPrimorialMultiplier)
 {
-
-   nProbableChainLength = 0;
-   nTests = 0;
-   nPrimesHit = 0;
-   //if (fNewBlock && *psieve != NULL)
-   //{
-   //	// Must rebuild the sieve
-   ////	printf("Must rebuild the sieve\n");
-   //	delete *psieve;
-   //	*psieve = NULL;
-   //}
    fNewBlock = false;
+   unsigned int nProbableChainLength = 0;
    unsigned int lSieveTarget, lSieveBTTarget;
 
-   if (nOverrideBTTargetValue > 0)
-      lSieveBTTarget = nOverrideBTTargetValue;
+   if (nOverrideTargetValue > 0)
+      lSieveTarget = nOverrideTargetValue;
    else
    {
       // If Difficulty gets within 1/36th of next target length, its actually more efficent to
@@ -891,42 +880,31 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
       // help block rate.
       // Discussions with jh00 revealed this is non-linear, and graphs show that 0.1 diff is enough
       // to warrant a switch
-      lSieveBTTarget = TargetGetLength(block->nBits);
-      if (GetChainDifficulty(block->nBits) >= ((lSieveBTTarget + 1) - 0.1f))
-         lSieveBTTarget++;
+      lSieveTarget = TargetGetLength(block->nBits);
+      if (GetChainDifficulty(block->nBits) >= ((lSieveTarget + 1) - 0.1f))
+         lSieveTarget++;
    }
 
-   if (nOverrideTargetValue > 0)
-      lSieveTarget = nOverrideTargetValue;
+   if (nOverrideBTTargetValue > 0)
+      lSieveBTTarget = nOverrideBTTargetValue;
    else
    {
-      /*      // sieve target not specified - set to lowest we can for shares.
-      lSieveTarget = TargetGetLength(block->serverData.nBitsForShare);
-      // Make sure its at least CC1 BTTarget + 2.
-      if (lSieveTarget <= ((lSieveBTTarget + 3) / 2)) lSieveTarget++;
-      */
-      lSieveTarget = lSieveBTTarget;
+      lSieveBTTarget = lSieveTarget;
    }
 
 
    //mpzHash.set_str("b5a9a5282286e14ab043c57d9dcedbfcc58d3f4ca959495d0346a719509357c2", 16);
    //mpzFixedMultiplier.set_str("eabf889075749e389f3d41c03b3baa63d5aecc044b",16);
 
-   //int64 nStart, nCurrent; // microsecond timer
    if (psieve == NULL)
    {
       // Build sieve
       psieve = new CSieveOfEratosthenes(nMaxSieveSize, nMaxPrimes, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
-      //(*psieve)->Weave();
    }
    else
    {
       psieve->Init(nMaxSieveSize, nMaxPrimes, lSieveTarget, lSieveBTTarget, mpzHash, mpzFixedMultiplier);
-      //(*psieve)->Weave();
    }
-
-   //primeStats.nSieveRounds++;
-   //primeStats.nCandidateCount += (*psieve)->GetCandidateCount();
 
    //printf("\nHash: %s", mpzHash.get_str(16).c_str());
    //printf("\nMultiplier: %s", mpzFixedMultiplier.get_str(16).c_str());
@@ -950,127 +928,38 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
    unsigned int nTriedMultiplier = 0;
    unsigned int nLayerMultiplier = 0;
 
-   //nStart = GetTickCount();
-   //nCurrent = nStart;
-
-   //uint32 timeStop = GetTickCount() + 25000;
-   //int nTries = 0;
    bool multipleShare = false;
-   bool sieveRescan = false;
    mpz_class mpzPrevPrimeChainMultiplier = 0;
 
    bool rtnValue = false;
 
-   bool bFullScan = false;
-
    //while ( (nTests < 7000 || bFullScan ) && block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    while (block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    {
-      nTests++;
       if (!psieve->GetNextCandidateMultiplier(nTriedMultiplier, nLayerMultiplier, nCandidateType))
       {			
-         if (!sieveRescan && bFullScan)
-         {
-            //fast rescan for more shares.
-            //(*psieve)->SetSievePercentage(100); //100%
-            //(*psieve)->Weave();
-            sieveRescan = true;
-            continue;
-         }
-         else
-         {
-            // power tests completed for the sieve
-            fNewBlock = true; // notify caller to change nonce
-            rtnValue = false;
-            break;
-         }
+         fNewBlock = true; // notify caller to change nonce
+         rtnValue = false;
+         break;
       }
-
-      //printf(" %u-%u ", nTriedMultiplier, nCandidateType);
 
       mpzChainOrigin = mpzHash * mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier);		
       nChainLength = 0;		
       unsigned char lCC1Composite, lCC2Composite;
       ProbablePrimeChainTestFast(mpzChainOrigin, testParams, lCC1Composite, lCC2Composite);
-      // Feedback the origin prime test result for optimising next layer.
-      psieve->UpdateLastCandidatePrimality(lCC1Composite, lCC2Composite);
-
       nProbableChainLength = nChainLength;
-      sint32 shareDifficultyMajor = 0;
 
-      primeStats.primeChainsFound++;
-
-      if( nProbableChainLength >= 0x06000000 )
-      {
-         shareDifficultyMajor = (sint32)(nChainLength>>24);
-      }
-      else
-      {
-         continue;
-      }
-
-      //if (shareDifficultyMajor >= 6)
-      //{				
-      //   //if (!sieveRescan)
-      //   //{				
-      //   primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
-      //   primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
-      //   //if (shareDifficultyMajor >= 4) // auto adjust nPrimorialMultiplier based on 4diff shares - should be 6+ but then the adjustment would be painfully slow.
-      //   primeStats.nChainHit++;
-      //   //}
-      //   // do a 100% rescan of the sieve for higer shares
-      //   //if (shareDifficultyMajor >= 5 && nSievePercentage < 66)
-      //   //{
-      //   //	bFullScan = true;
-      //   //}
-      //}
-      //if( nProbableChainLength > 0x03000000 )
-      //	primeStats.qualityPrimesFound++;
       if( nProbableChainLength > primeStats.bestPrimeChainDifficulty )
          primeStats.bestPrimeChainDifficulty = nProbableChainLength;
 
       if(nProbableChainLength >= block->serverData.nBitsForShare)
       {
          block->mpzPrimeChainMultiplier = mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier);
-         //int minLengthMultiplier,maxLengthMultiplier;
-         //minLengthMultiplier = maxLengthMultiplier= 0;
-         //// Check for a Non BiTwin greater than min chain length that we can maximise share count from.
-         //if ((nCandidateType != PRIME_CHAIN_BI_TWIN) && (nProbableChainLength >= (block->serverData.nBitsForShare + (1UL << 24))))
-         //{
-         //   // Calculate how many lesser value shares we can glean
-         //   maxLengthMultiplier = (nProbableChainLength >> 24) - (block->serverData.nBitsForShare >> 24);
-         //   if ((nProbableChainLength - (maxLengthMultiplier << 24)) < block->serverData.nBitsForShare) maxLengthMultiplier--;
-         //   if (nProbableChainLength >= block->nBits)
-         //   {
-         //      // This is a block solving share - make sure we extract max share value.
-         //      minLengthMultiplier = 1;
-         //      while (block->nBits < (nProbableChainLength - (minLengthMultiplier << 24)))
-         //      {
-         //         minLengthMultiplier++;
-         //      }
-         //   }
-         //}
-         //printf("SHARE FOUND - DIFF:%8f - TYPE:%u - MINLEN:%u (%u) - MAXLEN: %u (%u)\n", GetChainDifficulty(nProbableChainLength), nCandidateType, minLengthMultiplier, (1 << minLengthMultiplier), maxLengthMultiplier, (1 << maxLengthMultiplier));
-
-         //for (int i = maxLengthMultiplier; i >= 0; i--)
-         //{
-         //   // Check if this share must be skipped as it solves block prematurely.
-         //   if ((i > 0) && (i < minLengthMultiplier)) continue; 
-
-         //block->mpzPrimeChainMultiplier = (mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier)) * (1 << i);
 
          if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
             continue;
 
-         //if (sieveRescan)
-         //{
-         //		// count the chains also on rescan
-         //    primeStats.chainCounter[0][min(shareDifficultyMajor,12)]++;
-         //    primeStats.chainCounter[nCandidateType][min(shareDifficultyMajor,12)]++;
-         // }
-
          // update server data
-         //block->serverData.client_shareBits = nProbableChainLength - (1UL << 24);
          block->serverData.client_shareBits = nProbableChainLength;
 
          primeStats.chainCounter[0][min((block->serverData.client_shareBits >> 24),12)]++;
@@ -1123,15 +1012,14 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
          RtlZeroMemory(blockRawData, 256);
          //}
       }
-      //if(TargetGetLength(nProbableChainLength) >= 1)
-      //	nPrimesHit++;
-      //nCurrent = GetTickCount();
+      else
+      {
+         // Feedback the origin prime test result for optimising next layer.
+         // Strictly speaking this should always be called, but in order to maximise shares
+         // We only call if a share was not found.
+         psieve->UpdateLastCandidatePrimality(lCC1Composite, lCC2Composite);
+      }
    }
-   //if( *psieve )
-   //{
-   //	delete *psieve;
-   //	*psieve = NULL;
-   //}
    return rtnValue; // stop as timed out
 }
 

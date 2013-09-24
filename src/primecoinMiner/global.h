@@ -111,7 +111,6 @@ typedef struct
 
 typedef struct  
 {
-	volatile uint32 primeChainsFound;
 	volatile uint32 foundShareCount;
 	volatile float fShareValue;
 	volatile float fBlockShareValue;

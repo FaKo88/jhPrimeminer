@@ -45,7 +45,6 @@ class CSieveOfEratosthenes
    unsigned int nCandidatesWords;
    unsigned int nCandidatesBytes;
    unsigned int nCandidateMultiplier; // current candidate for power test
-   unsigned int nCandidateMultiplierType; // current candidate type for power test
    int nCandidateLayer;
 
    // final set of candidates for probable primality checking

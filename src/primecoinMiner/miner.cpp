@@ -2,8 +2,8 @@
 #include <time.h>
 
 
-bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* block, mpz_class& bnFixedMultiplier, bool& fNewBlock, unsigned int& nProbableChainLength, 
-                            unsigned int& , unsigned int& nPrimesHit, sint32 threadIndex, mpz_class& mpzHash, unsigned int nPrimorialMultiplier);
+bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* block, mpz_class& bnFixedMultiplier, bool& fNewBlock, 
+                            sint32 threadIndex, mpz_class& mpzHash, unsigned int nPrimorialMultiplier);
 
 std::set<mpz_class> multiplierSet;
 
@@ -97,19 +97,7 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
       }
       // Primecoin: primorial fixed multiplier
       mpz_class mpzPrimorial;
-      int64 nPrimeTimerStart = GetTickCount();
-
-      //if( loopCount > 0 )
-      //{
-      //	//primecoinBlock->nonce++;
-      //	if (!PrimeTableGetNextPrime(nPrimorialMultiplier))
-      //		error("PrimecoinMiner() : primorial increment overflow");
-      //}
-
       Primorial(nPrimorialMultiplier, mpzPrimorial);
-
-      unsigned int nTests = 0;
-      unsigned int nPrimesHit = 0;
 
       mpz_class mpzMultiplierMin = mpzPrimeMin * nHashFactor / mpzHash + 1;
       while (mpzPrimorial < mpzMultiplierMin )
@@ -126,28 +114,14 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
       }		
       //printf("fixedMultiplier: %d nPrimorialMultiplier: %d\n", BN_get_word(&bnFixedMultiplier), nPrimorialMultiplier);
       // Primecoin: mine for prime chain
-      unsigned int nProbableChainLength;
-		MineProbablePrimeChain(psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, nProbableChainLength, nTests, nPrimesHit, threadIndex, mpzHash, nPrimorialMultiplier);
+		MineProbablePrimeChain(psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, threadIndex, mpzHash, nPrimorialMultiplier);
       threadHearthBeat[threadIndex] = GetTickCount();
       if (appQuitSignal)
       {
          printf( "Shutting down mining thread %d.\n", threadIndex);
          return false;
       }
-      //{
-      //	// do nothing here, share is already submitted in MineProbablePrimeChain()
-      //	//primecoinBlock->nonce += 0x00010000;
-      //	primecoinBlock->nonce++;
-      //	nPrimorialMultiplier = primeStats.nPrimorialMultiplier;
-      //	//break;
-      //}
-      //psieve = NULL;
       nPrimorialMultiplier = primeStats.nPrimorialMultiplier;
-      // added this
-      //if (fNewBlock)
-      //{
-      //}
-
 
       primecoinBlock->nonce ++;
       //primecoinBlock->timestamp = max(primecoinBlock->timestamp, (unsigned int) time(NULL));
