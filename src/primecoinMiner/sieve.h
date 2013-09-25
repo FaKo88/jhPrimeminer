@@ -18,7 +18,6 @@ typedef unsigned long sieve_word_t;
 typedef struct
 {
    unsigned int nMultiplierCandidate;
-   unsigned int nMultiplierBits; // 32 bit integer containing:11 bits for Layer number, 1 bit for CC2 indicator, 20 bits for Prime index. 
 }primeMultiplier_t;
 
 class CSieveOfEratosthenes
@@ -61,8 +60,6 @@ class CSieveOfEratosthenes
    std::vector<std::vector<primeMultiplier_t>> vfCC2PrimeMultipliers;
    std::vector<std::vector<std::vector<primeMultiplier_t*>>> vfExtendedCC1PrimesToWeave;
    std::vector<std::vector<std::vector<primeMultiplier_t*>>> vfExtendedCC2PrimesToWeave;
-   std::vector<unsigned int> vfCC1PrimeMultiplierCounters;
-   std::vector<unsigned int> vfCC2PrimeMultiplierCounters;
    unsigned int nPrimeMultiplierAutoWeaveCounter;
    std::vector<std::vector<unsigned int>> vfCC1ExtendedPrimeCounters;
    std::vector<std::vector<unsigned int>> vfCC2ExtendedPrimeCounters;
@@ -167,35 +164,31 @@ class CSieveOfEratosthenes
       primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
    }
 
-   void AddCC1Multiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nPrime, const unsigned int nSolvedMultiplier)
+   void AddCC1Multiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nPrime, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier)
    {
 #ifdef _DEBUG
       assert(nPrime < 0x7FFFFFFF);
 #endif
       const unsigned int lSieveSize = this->nSieveSize;
-      const unsigned int insertPos = vfCC1PrimeMultiplierCounters[nLayerNum]++;
-      vfCC1PrimeMultipliers[nLayerNum][insertPos].nMultiplierCandidate = nSolvedMultiplier;
-      vfCC1PrimeMultipliers[nLayerNum][insertPos].nMultiplierBits = nPrime;
+      vfCC1PrimeMultipliers[nLayerNum][nPrimeSeq].nMultiplierCandidate = nSolvedMultiplier;
 
       if (nPrime > lSieveSize)
       {
-         UpdateCC1ExtendedMultiplierList(nCurrentMuliplierRound, nLayerNum, nSolvedMultiplier, &vfCC1PrimeMultipliers[nLayerNum][insertPos]);
+         UpdateCC1ExtendedMultiplierList(nCurrentMuliplierRound, nLayerNum, nSolvedMultiplier, &vfCC1PrimeMultipliers[nLayerNum][nPrimeSeq]);
       }
    }
 
-   void AddCC2Multiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nPrime, const unsigned int nSolvedMultiplier)
+   void AddCC2Multiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nPrime, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier)
    {
 #ifdef _DEBUG
       assert(nPrime < 0x7FFFFFFF);
 #endif
       const unsigned int lSieveSize = this->nSieveSize;
-      const unsigned int insertPos = vfCC2PrimeMultiplierCounters[nLayerNum]++;
-      vfCC2PrimeMultipliers[nLayerNum][insertPos].nMultiplierCandidate = nSolvedMultiplier;
-      vfCC2PrimeMultipliers[nLayerNum][insertPos].nMultiplierBits = nPrime;
+      vfCC2PrimeMultipliers[nLayerNum][nPrimeSeq].nMultiplierCandidate = nSolvedMultiplier;
 
       if (nPrime > lSieveSize)
       {
-         UpdateCC2ExtendedMultiplierList(nCurrentMuliplierRound, nLayerNum, nSolvedMultiplier, &vfCC2PrimeMultipliers[nLayerNum][insertPos]);
+         UpdateCC2ExtendedMultiplierList(nCurrentMuliplierRound, nLayerNum, nSolvedMultiplier, &vfCC2PrimeMultipliers[nLayerNum][nPrimeSeq]);
       }
    }
 
@@ -203,8 +196,8 @@ class CSieveOfEratosthenes
 
    //void ReUsePreviouslyWovenValues(const unsigned int layerSeq);
 
-   void ProcessCC1PrimeMultiplier(primeMultiplier_t* multiplierToProcess, unsigned int& solvedMultiplier, unsigned int layerSeq);
-   void ProcessCC2PrimeMultiplier(primeMultiplier_t* multiplierToProcess, unsigned int& solvedMultiplier, unsigned int layerSeq);
+   void ProcessCC1PrimeMultiplier(primeMultiplier_t* multiplierToProcess, const unsigned int nPrime, unsigned int& solvedMultiplier, unsigned int layerSeq);
+   void ProcessCC2PrimeMultiplier(primeMultiplier_t* multiplierToProcess, const unsigned int nPrime, unsigned int& solvedMultiplier, unsigned int layerSeq);
 
    void Weave();
 
