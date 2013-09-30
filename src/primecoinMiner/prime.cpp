@@ -1004,12 +1004,21 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
          }
          printf("\n");
 
+         std::ofstream shareLog;
+         shareLog.open("FoundShares.log", std::ios::out | std::ios::app);
+         if (shareLog.is_open())
+         {
+            shareLog << "S" << mpzHash.get_str(16).c_str() << "\t" << mpzFixedMultiplier.get_str(16).c_str() << "\t" << nTriedMultiplier << "\t" << nLayerMultiplier << "\t" << nTriedMultiplier/nMaxSieveSize << "\t" << shareDiff << "\t" << nCandidateType << "\n";
+            shareLog.close();
+         }
+
          // submit this share
          multiplierSet.insert(block->mpzPrimeChainMultiplier);
          multipleShare = true;
          jhMiner_pushShare_primecoin(blockRawData, block);
          primeStats.foundShareCount ++;
          RtlZeroMemory(blockRawData, 256);
+         psieve->nMaxWeaveMultiplier++;
          //}
       }
       else

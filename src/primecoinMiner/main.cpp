@@ -4,6 +4,8 @@
 #include<ctime>
 #include<map>
 #include<conio.h>
+#include<iostream>
+#include<fstream>
 
 
 primeStats_t primeStats = {0};
@@ -783,7 +785,14 @@ void PrintCurrentSettings()
    printf("Primorial Multiplier (-m): %u\n", primeStats.nPrimorialMultiplier);
    printf("Chain Length Target (-target): %u\n", nOverrideTargetValue);	
    printf("BiTwin Length Target (-bttarget): %u\n", nOverrideBTTargetValue);	
-   printf("Auto Tune: %s\n", (primeStats.bEnablePrimeTuning) ? ((primeStats.bAutoTuneComplete) ? "enabled (Completed)" : "enabled (In Progress)" ) : "disabled");	
+   if (nEnableAutoTune)
+   {
+      printf("Auto Tune: %s\n", (primeStats.bAutoTuneComplete) ? "enabled (Completed)" : "enabled (In Progress)" );	
+   }
+   else
+   {
+      printf("Auto Tune: disabled\n");	
+   }
    printf("Total Runtime: %u Days, %u Hours, %u minutes, %u seconds\n", days, hours, minutes, seconds);	
    printf("Total Share Value submitted to the Pool: %.05f\n", primeStats.fTotalSubmittedShareValue);	
    printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n\n");
@@ -1000,6 +1009,23 @@ int jhMiner_main_getworkMode()
 */
 int jhMiner_main_xptMode()
 {
+   std::ofstream shareLog;
+   shareLog.open("FoundShares.log", std::ios::out | std::ios::app);
+   if (shareLog.is_open())
+   {
+      time_t now = time(0);
+      struct tm * timeinfo;
+      timeinfo = localtime (&now);
+      char sNow [80];
+      strftime (sNow, 80, "%x-%X",timeinfo);
+
+      shareLog << "*=============================================================================================\n";
+      shareLog << "*MINER STARTED @ " << sNow << "\t" << commandlineInput.numThreads << "\n";
+      shareLog << "*=============================================================================================\n";
+      shareLog << "I" << nMaxSieveSize << "\t" << nMaxPrimes << "\t" << primeStats.nSieveLayers << "\n";
+      shareLog.close();
+   }
+
    // start the Auto Tuning thread
    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)input_thread, NULL, 0, 0);
 
@@ -1239,6 +1265,15 @@ int jhMiner_main_xptMode()
                      }
                   }
                   printf("\n");
+
+                  std::ofstream shareLog;
+                  shareLog.open("FoundShares.log", std::ios::out | std::ios::app);
+                  if (shareLog.is_open())
+                  {
+                     shareLog << "I" << nMaxSieveSize << "\t" << nMaxPrimes << "\t" << primeStats.nSieveLayers << "\n";
+                     shareLog.close();
+                  }
+
                }
             }
             printf("\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\n");
@@ -1286,7 +1321,7 @@ int main(int argc, char **argv)
 
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v4.0c beta                 \xBA\n");
+   printf("\xBA  jhPrimeMiner - mod by rdebourbon -v4.0d beta                 \xBA\n");
    printf("\xBA  author: JH (http://ypool.net)                                \xBA\n");
    printf("\xBA                                                               \xBA\n");
    printf("\xBA  Credits: Sunny King for the original Primecoin client&miner  \xBA\n");

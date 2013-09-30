@@ -88,6 +88,7 @@ void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int numPrimes,
    this->nNumMultiplierRounds = (vPrimes[nPrimes-1] / nSieveSize) + 3; // Enough rounds for all prime values.
    this->nCurrentMultiplierRoundPos = 0;
    this->nCurrentWeaveMultiplier = 0;
+   this->nMaxWeaveMultiplier = 2;
    //this->nMaxWeaveMultiplier = ceil(4096000 / this->nSieveSize); // Enough rounds to get candidate numbers > 4mill.
 
    this->nCandidatesWords = (nSieveSize + nWordBits - 1) / nWordBits;
@@ -224,7 +225,7 @@ void CSieveOfEratosthenes::GenerateMultiplierTables()
       unsigned int nTwoInverse = (nPrime + 1) / 2;
 
       // Update auto Weave prime count.
-      if (nPrime <= lSieveSize)
+      if (nPrime <= (lSieveSize / 2))
       {
          nPrimeMultiplierAutoWeaveCounter = nPrimeSeq + 1;
       }
@@ -233,8 +234,8 @@ void CSieveOfEratosthenes::GenerateMultiplierTables()
       for (unsigned int nLayerSeq = 0; nLayerSeq < nSieveChainLength; nLayerSeq++)
       {
          // Find the first number that's divisible by this prime
-         AddCC1Multiplier(0, nLayerSeq, nPrime, nPrimeSeq, nFixedInverse);
-         AddCC2Multiplier(0, nLayerSeq, nPrime, nPrimeSeq, nPrime - nFixedInverse);
+         AddMultiplier(&vfCC1PrimeMultipliers[nLayerSeq], &vfExtendedCC1PrimesToWeave[nLayerSeq], &vfCC1ExtendedPrimeCounters[nLayerSeq], 0, nPrime, nPrimeSeq, nFixedInverse);
+         AddMultiplier(&vfCC2PrimeMultipliers[nLayerSeq], &vfExtendedCC2PrimesToWeave[nLayerSeq], &vfCC2ExtendedPrimeCounters[nLayerSeq], 0, nPrime, nPrimeSeq, nPrime - nFixedInverse);
          // For next number in chain
          nFixedInverse = (uint64)nFixedInverse * nTwoInverse % nPrime;
       }
@@ -331,7 +332,7 @@ vfCompositeCunningham2[layerSeq][i] = thisCC2Word;
 }
 */
 
-void CSieveOfEratosthenes::ProcessCC1PrimeMultiplier(primeMultiplier_t* multiplierToProcess, const unsigned int nPrime, unsigned int& solvedMultiplier, const unsigned int layerSeq)
+void CSieveOfEratosthenes::ProcessPrimeMultiplier(std::vector<sieve_word_t>* nComposites, primeMultiplier_t* multiplierToProcess, const unsigned int nPrime, unsigned int& solvedMultiplier)
 {
    const unsigned int lSieveSize = this->nSieveSize;
    const unsigned int lHalfSieveSize = lSieveSize /2;
@@ -351,15 +352,12 @@ void CSieveOfEratosthenes::ProcessCC1PrimeMultiplier(primeMultiplier_t* multipli
    sieve_word_t bitMask = GetCompositeBitMask(solvedMultiplier);
    for (; solvedMultiplier < lSieveSize; solvedMultiplier += nPrime)
    {
-      if ((bitMask & 0xAAAAAAAAAAAAAAAA) || !solvedMultiplier)
-      {
-         const unsigned int variableWordNum = GetCandidateWordNum(solvedMultiplier);
+      const unsigned int variableWordNum = GetCandidateWordNum(solvedMultiplier);
 #ifdef _DEBUG
-         assert(!solvedMultiplier || (solvedMultiplier % 2)); // variable multiplier must be 0 or odd;
-         assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
+      assert(!solvedMultiplier || (solvedMultiplier % 2)); // variable multiplier must be 0 or odd;
+      assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
 #endif
-         vfCompositeCunningham1[layerSeq][variableWordNum] |= bitMask;
-      }
+      (*nComposites)[variableWordNum] |= bitMask;
       bitMask = (bitMask << rotateBits) | (bitMask >> (lWordBits - rotateBits));
    }
 #else
@@ -370,57 +368,11 @@ void CSieveOfEratosthenes::ProcessCC1PrimeMultiplier(primeMultiplier_t* multipli
 #ifdef _DEBUG
       assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
 #endif
-      vfCompositeCunningham1[layerSeq][variableWordNum] |= bitMask;
+      (*nComposites)[variableWordNum] |= bitMask;
    }
 #endif
 
 }
-
-void CSieveOfEratosthenes::ProcessCC2PrimeMultiplier(primeMultiplier_t* multiplierToProcess, const unsigned int nPrime, unsigned int& solvedMultiplier, const unsigned int layerSeq)
-{
-   const unsigned int lSieveSize = this->nSieveSize;
-   const unsigned int lHalfSieveSize = lSieveSize /2;
-   const unsigned int lWordBits = this->nWordBits;
-   const unsigned int lCandidatesWords = this->nCandidatesWords;
-
-   solvedMultiplier = multiplierToProcess->nMultiplierCandidate;
-
-   // Optimisation to reduce duplicate calc/check overhead
-   //if ((!layerSeq) && (variableMultiplier < lHalfSieveSize))
-   //{
-   //   variableMultiplier += (lHalfSieveSize - variableMultiplier + prime - 1) / prime * prime;
-   //}
-
-#ifdef USE_ROTATE
-   const unsigned int rotateBits = nPrime % lWordBits;
-   sieve_word_t bitMask = GetCompositeBitMask(solvedMultiplier);
-   for (; solvedMultiplier < lSieveSize; solvedMultiplier += nPrime)
-   {
-      if ((bitMask & 0xAAAAAAAAAAAAAAAA) || !solvedMultiplier)
-      {
-         const unsigned int variableWordNum = GetCandidateWordNum(solvedMultiplier);
-#ifdef _DEBUG
-         assert(!solvedMultiplier || (solvedMultiplier % 2)); // variable multiplier must be 0 or odd;
-         assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
-#endif
-         vfCompositeCunningham2[layerSeq][variableWordNum] |= bitMask;
-      }
-      bitMask = (bitMask << rotateBits) | (bitMask >> (lWordBits - rotateBits));
-   }
-#else
-   for (; solvedMultiplier < lSieveSize; solvedMultiplier += prime)
-   {
-      const unsigned int variableWordNum = GetCandidateWordNum(solvedMultiplier);
-      const sieve_word_t bitMask = GetCompositeBitMask(solvedMultiplier);
-#ifdef _DEBUG
-      assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
-#endif
-      vfCompositeCunningham2[layerSeq][variableWordNum] |= bitMask;
-   }
-#endif
-
-}
-
 
 void CSieveOfEratosthenes::Weave()
 {
@@ -460,17 +412,17 @@ void CSieveOfEratosthenes::Weave()
       const unsigned int numPrimeMultipliers = this->nPrimeMultiplierAutoWeaveCounter;
       for (int i = 0 ; i < numPrimeMultipliers; i++)
       {
-         const unsigned int nPrime = vPrimes[i];
+         const unsigned int nPrime = vPrimes[i] << 1; // times 2
          unsigned int solvedMultiplier;
          primeMultiplier = &vfCC1PrimeMultipliers[layerSeq][i];
          if (primeMultiplier->nMultiplierCandidate == 0xFFFFFFFF) continue;
-         ProcessCC1PrimeMultiplier(primeMultiplier, nPrime, solvedMultiplier, layerSeq);
-         //primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
+         ProcessPrimeMultiplier(&vfCompositeCunningham1[layerSeq], primeMultiplier, nPrime, solvedMultiplier);
+         primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
 
          primeMultiplier = &vfCC2PrimeMultipliers[layerSeq][i];
          if (primeMultiplier->nMultiplierCandidate == 0xFFFFFFFF) continue;
-         ProcessCC2PrimeMultiplier(primeMultiplier, nPrime, solvedMultiplier, layerSeq);
-         //primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
+         ProcessPrimeMultiplier(&vfCompositeCunningham2[layerSeq], primeMultiplier, nPrime, solvedMultiplier);
+         primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
       }
 
       // Weave the extended primes that affect the current bucket.
@@ -480,8 +432,8 @@ void CSieveOfEratosthenes::Weave()
          primeMultiplier = vfExtendedCC1PrimesToWeave[layerSeq][multiplierPos][i];
          const int primePos = primeMultiplier - &vfCC1PrimeMultipliers[layerSeq][0];
          unsigned int solvedMultiplier;
-         ProcessCC1PrimeMultiplier(primeMultiplier, vPrimes[primePos], solvedMultiplier, layerSeq);
-         //UpdateCC1ExtendedMultiplierList(multiplierPos, layerSeq, solvedMultiplier, primeMultiplier);
+         ProcessPrimeMultiplier(&vfCompositeCunningham1[layerSeq], primeMultiplier, (vPrimes[primePos] << 1), solvedMultiplier);
+         UpdateExtendedMultiplierList(multiplierPos, solvedMultiplier, primeMultiplier, &vfExtendedCC1PrimesToWeave[layerSeq], &vfCC1ExtendedPrimeCounters[layerSeq]);
       }
       const unsigned int numCC2ExtendedPrimeMultipliers = vfCC2ExtendedPrimeCounters[layerSeq][multiplierPos];
       for (int i = 0 ; i < numCC2ExtendedPrimeMultipliers; i++)
@@ -489,8 +441,8 @@ void CSieveOfEratosthenes::Weave()
          primeMultiplier = vfExtendedCC2PrimesToWeave[layerSeq][multiplierPos][i];
          const int primePos = primeMultiplier - &vfCC2PrimeMultipliers[layerSeq][0];
          unsigned int solvedMultiplier;
-         ProcessCC2PrimeMultiplier(primeMultiplier, vPrimes[primePos], solvedMultiplier, layerSeq);
-         //UpdateCC2ExtendedMultiplierList(multiplierPos, layerSeq, solvedMultiplier, primeMultiplier);
+         ProcessPrimeMultiplier(&vfCompositeCunningham2[layerSeq], primeMultiplier, (vPrimes[primePos] << 1), solvedMultiplier);
+         UpdateExtendedMultiplierList(multiplierPos, solvedMultiplier, primeMultiplier, &vfExtendedCC2PrimesToWeave[layerSeq], &vfCC2ExtendedPrimeCounters[layerSeq]);
       }
 
       // All multipliers dealt with for this round, clear layer counts.
@@ -538,19 +490,33 @@ void CSieveOfEratosthenes::UpdateCandidateValues()
       const unsigned int lCompositeIndex = (layerSeq + lCandidateLayer);
       const bool fUpdateBiTwinForCC1 = (layerSeq < lBTCC1ChainLength) ? 1 : 0;
       const bool fUpdateBiTwinForCC2 = (layerSeq < lBTCC2ChainLength) ? 1 : 0;
-      for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
+      if (fUpdateBiTwinForCC2)// Only need to check 1 part of the BiTwin, the lesser part. If this is true, the greater part must also be true.
       {
-         vfCandidates[wordNo] |= vfCompositeCunningham2[lCompositeIndex][wordNo];
-         vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[lCompositeIndex][wordNo];
-         if (fUpdateBiTwinForCC2) // Only need to check 1 part of the BiTwin, the lesser part. If this is true, the greater part must also be true.
+         for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
          {
+            vfCandidates[wordNo] |= vfCompositeCunningham2[lCompositeIndex][wordNo];
+            vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[lCompositeIndex][wordNo];
             vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[lCompositeIndex][wordNo] | vfCompositeCunningham2[lCompositeIndex][wordNo];
          }
-         else if(fUpdateBiTwinForCC1)
+      }
+      else if (fUpdateBiTwinForCC1)
+      {
+         for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
          {
+            vfCandidates[wordNo] |= vfCompositeCunningham2[lCompositeIndex][wordNo];
+            vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[lCompositeIndex][wordNo];
             vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[lCompositeIndex][wordNo];
          }
       }
+      else
+      {
+         for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
+         {
+            vfCandidates[wordNo] |= vfCompositeCunningham2[lCompositeIndex][wordNo];
+            vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[lCompositeIndex][wordNo];
+         }
+      }
+
    }
 
    // Final and.or combination
@@ -585,7 +551,7 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
          //if (nCandidateLayer > (nSieveChainLength - nChainLength))
          if (nCandidateLayer < 0)
          {
-            if (nCurrentMultiplierRoundPos >= 1) return false; //(vPrimes[this->nMaxWeaveMultiplier] - 1)) return false;//1) return false; // 
+            if (nCurrentMultiplierRoundPos >= this->nMaxWeaveMultiplier) return false; //(vPrimes[this->nMaxWeaveMultiplier] - 1)) return false;//1) return false; // 
 
             // Sieve for more candidates..
             //if (this->nCurrentMultiplierRoundPos == 0)

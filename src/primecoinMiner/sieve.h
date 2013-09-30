@@ -36,7 +36,7 @@ class CSieveOfEratosthenes
    unsigned int nNumMultiplierRounds;
    unsigned int nCurrentMultiplierRoundPos;
    unsigned int nCurrentWeaveMultiplier;
-   unsigned int nMaxWeaveMultiplier;
+   //unsigned int nMaxWeaveMultiplier;
 
    mpz_class mpzHash; // hash of the block header
    mpz_class mpzFixedMultiplier; // fixed round multiplier
@@ -133,62 +133,37 @@ class CSieveOfEratosthenes
       return (multiplierPos * lSieveChainLength) + layerSeq;
    }
 
-
-   void UpdateCC1ExtendedMultiplierList(const unsigned int currentMuliplierRound, const unsigned int nLayerNum, const unsigned int solvedMultiplier, primeMultiplier_t* primeMultiplier)
+   void UpdateExtendedMultiplierList(const unsigned int currentMuliplierRound, const unsigned int solvedMultiplier, 
+      primeMultiplier_t* primeMultiplier, std::vector<std::vector<primeMultiplier_t*>>* nExtendedPrimes, std::vector<unsigned int>* nExtendedPrimeCounters)
    {
       const unsigned int lNumMultiplierRounds = this->nNumMultiplierRounds;
       const unsigned int lSieveSize = this->nSieveSize;
       const unsigned int multiplierPos = (currentMuliplierRound + (solvedMultiplier / lSieveSize)) % lNumMultiplierRounds;
-      const unsigned int extendedPrimeCount = vfCC1ExtendedPrimeCounters[nLayerNum][multiplierPos]++;
+      const unsigned int extendedPrimeCount = (*nExtendedPrimeCounters)[multiplierPos]++;
 
-      if (extendedPrimeCount >= vfExtendedCC1PrimesToWeave[nLayerNum][multiplierPos].size())
+      if (extendedPrimeCount >= (*nExtendedPrimes)[multiplierPos].size())
       {
-         vfExtendedCC1PrimesToWeave[nLayerNum][multiplierPos].resize(extendedPrimeCount * 1.5);
+         (*nExtendedPrimes)[multiplierPos].resize(extendedPrimeCount * 1.5);
       }
-      vfExtendedCC1PrimesToWeave[nLayerNum][multiplierPos][extendedPrimeCount] = &*primeMultiplier;
+      (*nExtendedPrimes)[multiplierPos][extendedPrimeCount] = &*primeMultiplier;
       primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
    }
 
-   void UpdateCC2ExtendedMultiplierList(const unsigned int currentMuliplierRound, const unsigned int nLayerNum, const unsigned int solvedMultiplier, primeMultiplier_t* primeMultiplier)
+   void AddMultiplier(std::vector<primeMultiplier_t>* nPrimeMultipliers, std::vector<std::vector<primeMultiplier_t*>>* nExtendedPrimes, 
+      std::vector<unsigned int>* nExtendedPrimeCounters, const unsigned int nCurrentMuliplierRound, const unsigned int nPrime, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier)
    {
-      const unsigned int lNumMultiplierRounds = this->nNumMultiplierRounds;
       const unsigned int lSieveSize = this->nSieveSize;
-      const unsigned int multiplierPos = (currentMuliplierRound + (solvedMultiplier / lSieveSize)) % lNumMultiplierRounds;
-      const unsigned int extendedPrimeCount = vfCC2ExtendedPrimeCounters[nLayerNum][multiplierPos]++;
-
-      if (extendedPrimeCount >= vfExtendedCC2PrimesToWeave[nLayerNum][multiplierPos].size())
-      {
-         vfExtendedCC2PrimesToWeave[nLayerNum][multiplierPos].resize(extendedPrimeCount * 1.5);
-      }
-      vfExtendedCC2PrimesToWeave[nLayerNum][multiplierPos][extendedPrimeCount] = &*primeMultiplier;
-      primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
-   }
-
-   void AddCC1Multiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nPrime, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier)
-   {
+      const unsigned int lSolvedMultiplier = (nSolvedMultiplier % 2) ? nSolvedMultiplier : (nSolvedMultiplier + nPrime);
 #ifdef _DEBUG
-      assert(nPrime < 0x7FFFFFFF);
+      //assert(nPrime < 0x7FFFFFFF);
+      assert(lSolvedMultiplier % 2 == 1); // Must be odd.
 #endif
-      const unsigned int lSieveSize = this->nSieveSize;
-      vfCC1PrimeMultipliers[nLayerNum][nPrimeSeq].nMultiplierCandidate = nSolvedMultiplier;
 
-      if (nPrime > lSieveSize)
+      (*nPrimeMultipliers)[nPrimeSeq].nMultiplierCandidate = lSolvedMultiplier;
+
+      if (nPrime > (lSieveSize / 2))
       {
-         UpdateCC1ExtendedMultiplierList(nCurrentMuliplierRound, nLayerNum, nSolvedMultiplier, &vfCC1PrimeMultipliers[nLayerNum][nPrimeSeq]);
-      }
-   }
-
-   void AddCC2Multiplier(const unsigned int nCurrentMuliplierRound, const unsigned int nLayerNum, const unsigned int nPrime, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier)
-   {
-#ifdef _DEBUG
-      assert(nPrime < 0x7FFFFFFF);
-#endif
-      const unsigned int lSieveSize = this->nSieveSize;
-      vfCC2PrimeMultipliers[nLayerNum][nPrimeSeq].nMultiplierCandidate = nSolvedMultiplier;
-
-      if (nPrime > lSieveSize)
-      {
-         UpdateCC2ExtendedMultiplierList(nCurrentMuliplierRound, nLayerNum, nSolvedMultiplier, &vfCC2PrimeMultipliers[nLayerNum][nPrimeSeq]);
+         UpdateExtendedMultiplierList(nCurrentMuliplierRound, lSolvedMultiplier, &(*nPrimeMultipliers)[nPrimeSeq], nExtendedPrimes, nExtendedPrimeCounters);
       }
    }
 
@@ -196,8 +171,7 @@ class CSieveOfEratosthenes
 
    //void ReUsePreviouslyWovenValues(const unsigned int layerSeq);
 
-   void ProcessCC1PrimeMultiplier(primeMultiplier_t* multiplierToProcess, const unsigned int nPrime, unsigned int& solvedMultiplier, unsigned int layerSeq);
-   void ProcessCC2PrimeMultiplier(primeMultiplier_t* multiplierToProcess, const unsigned int nPrime, unsigned int& solvedMultiplier, unsigned int layerSeq);
+   void ProcessPrimeMultiplier(std::vector<sieve_word_t>* nComposites, primeMultiplier_t* multiplierToProcess, const unsigned int nPrime, unsigned int& solvedMultiplier);
 
    void Weave();
 
@@ -206,7 +180,7 @@ class CSieveOfEratosthenes
 
 public:
 
-
+   unsigned int nMaxWeaveMultiplier;
    unsigned int nSkippedPrimes;
 
    CSieveOfEratosthenes(unsigned int sieveSize, unsigned int numPrimes, unsigned int targetChainLength, unsigned int btTargetChainLength, mpz_class& mpzHash, mpz_class& mpzFixedMultiplier)
