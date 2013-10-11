@@ -475,13 +475,6 @@ public:
    //   True  - weaved another prime; nComposite - number of composites removed
    //   False - sieve already completed
    bool Weave();
-
-   void SetSievePercentage(unsigned int nNewSievePercentage)
-   {
-      this->nSievePercentage = nNewSievePercentage;
-      this->nTotalPrimes = vPrimes.size();
-      this->nPrimes = (uint64)nTotalPrimes * nSievePercentage / 100;
-   }
 };
 */
 

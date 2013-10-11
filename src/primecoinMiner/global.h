@@ -33,14 +33,25 @@ int BN2_uadd(BIGNUM *r, const BIGNUM *a, const BIGNUM *b);
 // original primecoin BN stuff
 #include"uint256.h"
 #include"bignum2.h"
-//#include"bignum_custom.h"
-
 #include"prime.h"
 #include"jsonrpc.h"
 #include"sieve.h"
 #include "mpirxx.h"
 #include "mpir.h"
+#ifndef _MSC_VER == 1500
 #include<stdint.h>
+#else
+// stdint.h not present in vs2008, use these defines instead:
+typedef signed char int8_t;
+typedef short int int16_t;
+typedef int int32_t;
+typedef __int64 int64_t;
+
+typedef unsigned char uint8_t;
+typedef unsigned short int uint16_t;
+typedef unsigned int uint32_t;
+typedef unsigned __int64 uint64_t;
+#endif
 #include"xptServer.h"
 #include"xptClient.h"
 
@@ -67,6 +78,7 @@ static inline void swap32yes(void*out, const void*in, size_t sz) {
       (((uint32_t*)out)[swapcounter]) = swab32(((uint32_t*)in)[swapcounter]);
 }
 
+//#define loop                for (;;)
 #define BEGIN(a)            ((char*)&(a))
 #define END(a)              ((char*)&((&(a))[1]))
 #define swap32tobe(out, in, sz)  swap32yes(out, in, sz)
@@ -139,8 +151,8 @@ typedef struct
    bool shareRejected;
    volatile unsigned int nL1CacheElements;
 
-   volatile double nBestNumbersTestedPerSecond;
-   volatile double nLastNumbersTestedPerSecond;
+   volatile uint32 nBestNumbersTestedPerSecond;
+   volatile uint32 nLastNumbersTestedPerSecond;
    volatile unsigned int nBestPrimorialMultiplier;
    volatile unsigned int nBestPrimeCount;
    volatile unsigned int nBestSieveSize;
@@ -156,6 +168,8 @@ typedef struct
 }primeStats_t;
 
 extern primeStats_t primeStats;
+extern bool bSoloMining;
+
 
 typedef struct  
 {
@@ -173,13 +187,28 @@ typedef struct
    serverData_t serverData;
    uint32 threadIndex; // the index of the miner thread
    bool xptMode;
+	// getblocktemplate data
+	uint32 seed;
 }primecoinBlock_t;
+
+
+struct blockHeader_t {
+  uint32	version;            //4(0)
+  uint256	prevBlockHash;      //32(4)
+  uint256	merkleRoot;			//32(36)
+  uint32	timestamp;          //4(68)
+  uint32	nBits;              //4(72)
+  uint32	nonce;              //4(76)
+  uint8		primeMultiplier[48];//48(80)
+};                                   
+
 
 extern jsonRequestTarget_t jsonRequestTarget; // rpc login data
 
 // prototypes from main.cpp
 bool error(const char *format, ...);
 bool jhMiner_pushShare_primecoin(uint8 data[256], primecoinBlock_t* primecoinBlock);
+bool SubmitBlock(primecoinBlock_t* pcBlock);
 void primecoinBlock_generateHeaderHash(primecoinBlock_t* primecoinBlock, uint8 hashOutput[32]);
 uint32 _swapEndianessU32(uint32 v);
 uint32 jhMiner_getCurrentWorkBlockHeight(sint32 threadIndex);
@@ -203,3 +232,7 @@ static inline uint32_t le32dec(const void *pp)
       ((uint32_t)(p[2]) << 16) + ((uint32_t)(p[3]) << 24));
 }
 #endif
+
+
+#include"transaction.h"
+uint64 jhMiner_primeCoin_targetGetMint(unsigned int nBits);
