@@ -913,7 +913,6 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
       nPrimorialSeq++;
 
    unsigned long nBitsForStats = (bSoloMining) ? (6 << 24) : block->serverData.nBitsForShare;
-   unsigned long nBitsForSubmission = (bSoloMining) ? block->serverData.nBitsForShare : block->nBits;
 
    // Allocate GMP variables for primality tests
    CPrimalityTestParams testParams(nBitsForStats, nPrimorialSeq);
@@ -970,7 +969,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
             maxLengthMultiplier = (nProbableChainLength >> 24) - (nBitsForStats >> 24);
             if ((nProbableChainLength - (maxLengthMultiplier << 24)) < nBitsForStats) maxLengthMultiplier--;
             maxLengthMultiplier /= chainLengthModifier; // factor down by chain length modifier
-            if (nProbableChainLength >= nBitsForSubmission)
+            if (nProbableChainLength >= block->serverData.nBitsForShare)
             {
                // This is a block solving share - make sure we extract max share value.
                minLengthMultiplier = 1;
@@ -1004,7 +1003,7 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
             //   printf("HashMultiplier : %u\n", nTriedMultiplier);
             //}
 
-            if  (block->serverData.client_shareBits >= nBitsForSubmission)
+            if  (block->serverData.client_shareBits >= block->serverData.nBitsForShare)
             {
 
                // attempt to prevent duplicate share submissions.
