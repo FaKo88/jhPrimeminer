@@ -372,7 +372,7 @@ bool jhMiner_pushShare_primecoin(uint8 data[512], primecoinBlock_t* primecoinBlo
          jsonObject_t* jsonReturnValueRejectReason = jsonObject_getParameter(jsonReturnValue, "result");
          if( jsonObject_getType(jsonReturnValueRejectReason) == JSON_TYPE_NULL )
          {
-            printf("Valid block found!\n");
+            //printf("Valid block found!\n");
             jsonObject_freeObject(jsonReturnValue);
             return true;
          }
@@ -437,7 +437,6 @@ int queryLocalPrimecoindBlockCount(bool useLocal)
 static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
 static const uint64_t diffone = 0xFFFF000000000000ull;
 
-static const unsigned int MAX_PRIMETABLE_SIZE = 250000;
 
 static double target_diff(const unsigned char *target)
 {
@@ -527,6 +526,8 @@ void jhMiner_queryWork_primecoin_getblocktemplate()
       {
          printf("UpdateWork(GetBlockTemplate) failed due to missing fields in the response.\n");
          jsonObject_freeObject(jsonReturnValue);
+         getBlockTemplateData.isValidData = false;
+         return;
       }
       // prepare field lengths
       uint32 stringLength_previousblockhash = 0;
@@ -1276,24 +1277,24 @@ static void input_thread()
             case 72: // key up
                if (nMaxPrimes < MAX_PRIMETABLE_SIZE)
                   nMaxPrimes ++;
-               printf("Primes Used: %u%%\n", nMaxPrimes);
+               printf("Primes Used: %u\n", nMaxPrimes);
                break;
 
             case 80: // key down
                if (nMaxPrimes > 1000)
                   nMaxPrimes --;
-               printf("Primes used: %u%%\n", nMaxPrimes);
+               printf("Primes used: %u\n", nMaxPrimes);
                break;
 
             case 77:    // key right
                if (nMaxPrimes < MAX_PRIMETABLE_SIZE) nMaxPrimes += 1000;
                if (nMaxPrimes > MAX_PRIMETABLE_SIZE) nMaxPrimes = MAX_PRIMETABLE_SIZE;
-               printf("Primes Used: %u%%\n", nMaxPrimes);
+               printf("Primes Used: %u\n", nMaxPrimes);
                break;
             case 75:    // key left
                if (nMaxPrimes > 1000) nMaxPrimes -= 1000;
                if (nMaxPrimes < 1000) nMaxPrimes = 1000;
-               printf("Primes used: %u%%\n", nMaxPrimes);
+               printf("Primes used: %u\n", nMaxPrimes);
                break;
             }
          }
@@ -1563,6 +1564,9 @@ void OnNewBlock(double nBitsShare, double nBits, unsigned long blockHeight)
 */
 int jhMiner_main_gbtMode()
 {
+   // Treat GBT as SoloMining.
+   bSoloMining = true;
+
    // main thread, query work every x seconds
    while( true )
    {
@@ -1571,16 +1575,25 @@ int jhMiner_main_gbtMode()
 
       // query new work
       jhMiner_queryWork_primecoin_getblocktemplate();
+
+      // If an error occurred while fetching data, try again in 30seconds.
+      if (!getBlockTemplateData.isValidData)
+      {
+         Sleep(30*1000);
+      }
+
       int currentBlockCount = getBlockTemplateData.height;
-      if (currentBlockCount != lastBlockCount && lastBlockCount > 0)
+      if (currentBlockCount != lastBlockCount)
       {	
          serverData_t* serverData = (serverData_t*)workData.workEntry[0].serverData; 				
          // update serverData
          serverData->nBitsForShare = getBlockTemplateData.nBits;
          serverData->blockHeight = getBlockTemplateData.height;
-         OnNewBlock(serverData->nBitsForShare, serverData->nBitsForShare, serverData->blockHeight);
          lastBlockCount = currentBlockCount;
-         break;
+         if (serverData->blockHeight > 0)
+         {
+            OnNewBlock(serverData->nBitsForShare, serverData->nBitsForShare, serverData->blockHeight);
+         }
       }
       lastBlockCount = currentBlockCount;
       Sleep(200);
@@ -1594,7 +1607,6 @@ int jhMiner_main_gbtMode()
 int jhMiner_main_getworkMode()
 {
    // main thread, query work every x seconds
-   sint32 loopCounter = 0;
    while( true )
    {
       if (appQuitSignal)
@@ -1603,12 +1615,14 @@ int jhMiner_main_getworkMode()
       // query new work
       jhMiner_queryWork_primecoin_getwork();
       int currentBlockCount = queryLocalPrimecoindBlockCount(useLocalPrimecoindForLongpoll);
-      if (currentBlockCount != lastBlockCount && lastBlockCount > 0)
+      if (currentBlockCount != lastBlockCount)
       {	
          serverData_t * serverData = (serverData_t*)workData.workEntry[0].serverData; 				
-         OnNewBlock( serverData->nBitsForShare, serverData->nBitsForShare, serverData->blockHeight);
          lastBlockCount = currentBlockCount;
-         break;
+         if (serverData->blockHeight > 0)
+         {
+            OnNewBlock( serverData->nBitsForShare, serverData->nBitsForShare, serverData->blockHeight);
+         }
       }
       lastBlockCount = currentBlockCount;
       Sleep(200);
@@ -1760,7 +1774,7 @@ int main(int argc, char **argv)
       pctx = BN_CTX_new();
    // init prime table
    GeneratePrimeTable(MAX_PRIMETABLE_SIZE);
-   printf("Primes Used: %u %%\n", nMaxPrimes);
+   printf("Primes Used: %u\n", nMaxPrimes);
    // init winsock
    WSADATA wsa;
    WSAStartup(MAKEWORD(2,2),&wsa);
@@ -1806,35 +1820,33 @@ int main(int argc, char **argv)
       workData.protocolMode = MINER_PROTOCOL_XPUSHTHROUGH;
       printf("Using x.pushthrough protocol\n");
    }
+   else if (commandlineInput.xpmAddress != NULL)
+   {
+      workData.protocolMode = MINER_PROTOCOL_GBT;
+      printf("Using GetBlockTemplate protocol\n");
+   }
    else
    {
-      if( useGetBlockTemplate )
-      {
-         workData.protocolMode = MINER_PROTOCOL_GBT;
-         // getblocktemplate requires a valid xpm address to be set
-         if( commandlineInput.xpmAddress == NULL )
-         {
-            printf("GetBlockTemplate mode requires -xpm parameter\n");
-            exit(-3);
-         }
-      }
-      else
-      {
-         workData.protocolMode = MINER_PROTOCOL_GETWORK;
-         printf("Using GetWork() protocol\n");
-         printf("Warning: \n");
-         printf("   GetWork() is outdated and inefficient. You are losing mining performance\n");
-         printf("   by using it. If the pool supports it, consider switching to x.pushthrough.\n");
-         printf("   Just add the port :10034 to the -o parameter.\n");
-         printf("   Example: jhPrimeminer.exe -o http://poolurl.net:10034 ...\n");
-      }
+      workData.protocolMode = MINER_PROTOCOL_GETWORK;
+      printf("Using GetWork() protocol\n");
+      printf("Warning: \n");
+      printf("   GetWork() is outdated and inefficient. You are losing mining performance\n");
+      printf("   by using it. If the pool supports it, consider switching to x.pushthrough.\n");
+      printf("   Just add the port :10034 to the -o parameter.\n");
+      printf("   Example: jhPrimeminer.exe -o http://poolurl.net:10034 ...\n");
    }
+
    // initial query new work / create new connection
-   if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
-   {
-      jhMiner_queryWork_primecoin_getwork();
-   }
-   else if( workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH )
+   //if( workData.protocolMode == MINER_PROTOCOL_GETWORK )
+   //{
+   //   jhMiner_queryWork_primecoin_getwork();
+   //}
+   //else if( workData.protocolMode == MINER_PROTOCOL_GBT)
+   //{
+   //   jhMiner_queryWork_primecoin_getblocktemplate();
+   //}
+   //else 
+   if( workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH )
    {
       workData.xptClient = NULL;
       // x.pushthrough initial connect & login sequence

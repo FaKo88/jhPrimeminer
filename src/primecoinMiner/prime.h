@@ -17,8 +17,10 @@ typedef unsigned long sieve_word_t;
 
 //#include "main.h"
 #include "mpirxx.h"
-
+static const unsigned int MAX_PRIMETABLE_SIZE = 100000;
 extern std::vector<unsigned int> vPrimes;
+extern std::vector<unsigned int> vDoubledPrimes;
+
 static const int nDefaultSieveExtensions = -1; // determine to be same as length
 extern int nSieveExtensions;
 

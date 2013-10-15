@@ -29,6 +29,7 @@ uint64 GetTimeMicros()
 }
 
 std::vector<unsigned int> vPrimes;
+std::vector<unsigned int> vDoubledPrimes;
 
 static unsigned int int_invert(unsigned int a, unsigned int nPrime);
 
@@ -36,9 +37,11 @@ static unsigned int int_invert(unsigned int a, unsigned int nPrime);
 
 void GeneratePrimeTable(unsigned int nNumPrimes)
 {
-   gmp_randinit_default(rands);
-   const unsigned int nPrimeTableLimit = 20000000 ; // 250000th prime is 3497861
+   const unsigned int nPrimeTableLimit = 1299827  ; // 100008 prime
    vPrimes.clear();
+   vDoubledPrimes.clear();
+
+   gmp_randinit_default(rands);
    // Generate prime table using sieve of Eratosthenes
    std::vector<bool> vfComposite (nPrimeTableLimit, false);
    for (unsigned int nFactor = 2; nFactor * nFactor < nPrimeTableLimit; nFactor++)
@@ -52,7 +55,11 @@ void GeneratePrimeTable(unsigned int nNumPrimes)
    // Add the required number of primes.
    for (unsigned int n = 2; n < nPrimeTableLimit ; n++)
    {
-      if (!vfComposite[n]) vPrimes.push_back(n);
+      if (!vfComposite[n])
+      {
+         vPrimes.push_back(n);
+         vDoubledPrimes.push_back(n << 1); // x 2
+      }
    }
    //while (vPrimes.size() < nNumPrimes)
    //{
@@ -880,7 +887,6 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
       lSieveBTTarget = lSieveTarget;
    }
 
-
    //mpzHash.set_str("b5a9a5282286e14ab043c57d9dcedbfcc58d3f4ca959495d0346a719509357c2", 16);
    //mpzFixedMultiplier.set_str("eabf889075749e389f3d41c03b3baa63d5aecc044b",16);
 
@@ -906,8 +912,11 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
    while (vPrimes[nPrimorialSeq + 1] <= nPrimorialMultiplier)
       nPrimorialSeq++;
 
+   unsigned long nBitsForStats = (bSoloMining) ? (6 << 24) : block->serverData.nBitsForShare;
+   unsigned long nBitsForSubmission = (bSoloMining) ? block->serverData.nBitsForShare : block->nBits;
+
    // Allocate GMP variables for primality tests
-   CPrimalityTestParams testParams(block->serverData.nBitsForShare, nPrimorialSeq);
+   CPrimalityTestParams testParams(nBitsForStats, nPrimorialSeq);
 
    // References to test parameters
    unsigned int& nChainLength = testParams.nChainLength;
@@ -920,9 +929,6 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
    mpz_class mpzPrevPrimeChainMultiplier = 0;
 
    bool rtnValue = false;
-
-   unsigned long nBitsForShare = (bSoloMining) ? (6 << 24) : block->serverData.nBitsForShare;
-   unsigned long nBitsForBlock = (bSoloMining) ? block->serverData.nBitsForShare : block->nBits;
 
    while (block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    {
@@ -939,7 +945,9 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
       ProbablePrimeChainTestFast(mpzChainOrigin, testParams, lCC1Composite, lCC2Composite);
       nProbableChainLength = nChainLength;
 
-      if (nProbableChainLength >= nBitsForShare) 
+      unsigned int rbdTemp = GetChainDifficulty(nProbableChainLength);
+
+      if (nProbableChainLength >= nBitsForStats) 
       {
          if( nProbableChainLength > primeStats.bestPrimeChainDifficulty )
             primeStats.bestPrimeChainDifficulty = nProbableChainLength;
@@ -956,17 +964,17 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
          minLengthMultiplier = maxLengthMultiplier= 0;
          chainLengthModifier = (nCandidateType == PRIME_CHAIN_BI_TWIN) ? 2 : 1;
          // Check for a chain greater than min chain length that we can maximise share count from.
-         if (nProbableChainLength >= (nBitsForShare + (chainLengthModifier << 24)))
+         if (nProbableChainLength >= (nBitsForStats + (chainLengthModifier << 24)))
          {
             // Calculate how many lesser value shares we can glean
-            maxLengthMultiplier = (nProbableChainLength >> 24) - (nBitsForShare >> 24);
-            if ((nProbableChainLength - (maxLengthMultiplier << 24)) < nBitsForShare) maxLengthMultiplier--;
+            maxLengthMultiplier = (nProbableChainLength >> 24) - (nBitsForStats >> 24);
+            if ((nProbableChainLength - (maxLengthMultiplier << 24)) < nBitsForStats) maxLengthMultiplier--;
             maxLengthMultiplier /= chainLengthModifier; // factor down by chain length modifier
-            if (nProbableChainLength >= nBitsForBlock)
+            if (nProbableChainLength >= nBitsForSubmission)
             {
                // This is a block solving share - make sure we extract max share value.
                minLengthMultiplier = 1;
-               while (nBitsForBlock < (nProbableChainLength - ((minLengthMultiplier * chainLengthModifier) << 24)))
+               while (block->nBits < (nProbableChainLength - ((minLengthMultiplier * chainLengthModifier) << 24)))
                {
                   minLengthMultiplier++;
                }
@@ -987,12 +995,6 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
             primeStats.chainCounter[nCandidateType][min((block->serverData.client_shareBits >> 24),12)]++;
             primeStats.nChainHit++;
 
-            time_t now = time(0);
-            struct tm * timeinfo;
-            timeinfo = localtime (&now);
-            char sNow [80];
-            strftime (sNow, 80, "%x-%X",timeinfo);
-            float shareDiff = GetChainDifficulty(block->serverData.client_shareBits);
 
             //if (nPrintDebugMessages)
             //{
@@ -1002,16 +1004,9 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
             //   printf("HashMultiplier : %u\n", nTriedMultiplier);
             //}
 
-            if (bSoloMining)
+            if  (block->serverData.client_shareBits >= nBitsForSubmission)
             {
-               if  (block->serverData.nBitsForShare >= nBitsForBlock)
-               {
-                  printf("%s - BLOCK FOUND! - (Th#:%2u) - DIFF:%8.05f - TYPE:%u\n", sNow, threadIndex, shareDiff, nCandidateType);
-                  return SubmitBlock( block);
-               }
-            }
-            else
-            {
+
                // attempt to prevent duplicate share submissions.
                if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
                   continue;
@@ -1035,7 +1030,14 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
                   *(uint32*)(blockRawData+f*4) = _swapEndianessU32(*(uint32*)(blockRawData+f*4));
                }
 
-               printf("%s - SHARE FOUND! - (Th#:%2u) - DIFF:%8.05f - TYPE:%u\n", sNow, threadIndex, shareDiff, nCandidateType);
+               time_t now = time(0);
+               struct tm * timeinfo;
+               timeinfo = localtime (&now);
+               char sNow [80];
+               strftime (sNow, 80, "%x-%X",timeinfo);
+               float shareDiff = GetChainDifficulty(block->serverData.client_shareBits);
+
+               printf("%s - CHAIN FOUND! - (Th#:%2u) - DIFF:%8.05f - TYPE:%u\n", sNow, threadIndex, shareDiff, nCandidateType);
 
                // submit this share
                multiplierSet.insert(block->mpzPrimeChainMultiplier);

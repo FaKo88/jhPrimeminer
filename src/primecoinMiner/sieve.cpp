@@ -71,6 +71,7 @@ void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int numPrimes,
    unsigned int oldPrimeCount = this->nPrimes;
 
    this->nSieveSize = nSieveSize;
+   this->nHalfSieveSize = nSieveSize >> 1; // divide by 2
    this->nChainLength = targetChainLength;
    this->nBTCC1ChainLength = (btTargetChainLength + 1) / 2;
    this->nBTCC2ChainLength = btTargetChainLength / 2;
@@ -186,7 +187,7 @@ void CSieveOfEratosthenes::GenerateMultiplierTables()
 {
    const unsigned int nTotalPrimes = nPrimes;
    const unsigned int nTotalPrimesLessOne = nTotalPrimes-1;
-   const unsigned int lSieveSize = this->nSieveSize;
+   const unsigned int lHalfSieveSize = this->nHalfSieveSize;
 
    mpz_class mpzFixedFactor = mpzHash * mpzFixedMultiplier;
    unsigned int nFixedFactorCombinedMod = 0;
@@ -225,7 +226,7 @@ void CSieveOfEratosthenes::GenerateMultiplierTables()
       unsigned int nTwoInverse = (nPrime + 1) / 2;
 
       // Update auto Weave prime count.
-      if (nPrime <= (lSieveSize / 2))
+      if (nPrime < lHalfSieveSize)
       {
          nPrimeMultiplierAutoWeaveCounter = nPrimeSeq + 1;
       }
@@ -412,15 +413,15 @@ void CSieveOfEratosthenes::Weave()
       const unsigned int numPrimeMultipliers = this->nPrimeMultiplierAutoWeaveCounter;
       for (int i = 0 ; i < numPrimeMultipliers; i++)
       {
-         const unsigned int nPrime = vPrimes[i] << 1; // times 2
-         unsigned int solvedMultiplier;
+         const unsigned int nPrime = vDoubledPrimes[i]; 
          primeMultiplier = &vfCC1PrimeMultipliers[layerSeq][i];
          if (primeMultiplier->nMultiplierCandidate == 0xFFFFFFFF) continue;
+         unsigned int solvedMultiplier;
          ProcessPrimeMultiplier(&vfCompositeCunningham1[layerSeq], primeMultiplier, nPrime, solvedMultiplier);
          primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
 
          primeMultiplier = &vfCC2PrimeMultipliers[layerSeq][i];
-         if (primeMultiplier->nMultiplierCandidate == 0xFFFFFFFF) continue;
+         //if (primeMultiplier->nMultiplierCandidate == 0xFFFFFFFF) continue;
          ProcessPrimeMultiplier(&vfCompositeCunningham2[layerSeq], primeMultiplier, nPrime, solvedMultiplier);
          primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
       }
@@ -430,7 +431,7 @@ void CSieveOfEratosthenes::Weave()
       for (int i = 0 ; i < numCC1ExtendedPrimeMultipliers; i++)
       {
          primeMultiplier = vfExtendedCC1PrimesToWeave[layerSeq][multiplierPos][i];
-         const int primePos = primeMultiplier - &vfCC1PrimeMultipliers[layerSeq][0];
+         const uint64 primePos = primeMultiplier - &vfCC1PrimeMultipliers[layerSeq][0];
          unsigned int solvedMultiplier;
          ProcessPrimeMultiplier(&vfCompositeCunningham1[layerSeq], primeMultiplier, (vPrimes[primePos] << 1), solvedMultiplier);
          UpdateExtendedMultiplierList(multiplierPos, solvedMultiplier, primeMultiplier, &vfExtendedCC1PrimesToWeave[layerSeq], &vfCC1ExtendedPrimeCounters[layerSeq]);
@@ -439,7 +440,7 @@ void CSieveOfEratosthenes::Weave()
       for (int i = 0 ; i < numCC2ExtendedPrimeMultipliers; i++)
       {
          primeMultiplier = vfExtendedCC2PrimesToWeave[layerSeq][multiplierPos][i];
-         const int primePos = primeMultiplier - &vfCC2PrimeMultipliers[layerSeq][0];
+         const uint64 primePos = primeMultiplier - &vfCC2PrimeMultipliers[layerSeq][0];
          unsigned int solvedMultiplier;
          ProcessPrimeMultiplier(&vfCompositeCunningham2[layerSeq], primeMultiplier, (vPrimes[primePos] << 1), solvedMultiplier);
          UpdateExtendedMultiplierList(multiplierPos, solvedMultiplier, primeMultiplier, &vfExtendedCC2PrimesToWeave[layerSeq], &vfCC2ExtendedPrimeCounters[layerSeq]);
@@ -641,16 +642,18 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
 
 void CSieveOfEratosthenes::UpdateLastCandidatePrimality(const unsigned char nCC1Composite, const unsigned char nCC2Composite)
 {
+   const unsigned int lCandidateLayer = (unsigned int)this->nCandidateLayer;
+   const unsigned int lSieveChainLength = this->nSieveChainLength;
    const unsigned int lWordNum = GetCandidateWordNum(nCandidateMultiplier);
    const sieve_word_t lBitMask = GetCompositeBitMask(nCandidateMultiplier);
 
-   if ((nCC1Composite > 0) && ((nCandidateLayer + nCC1Composite - 1) < nSieveChainLength))
+   if ((nCC1Composite > 0) && ((lCandidateLayer + nCC1Composite - 1) < lSieveChainLength))
    {
-      vfCompositeCunningham1[nCandidateLayer + nCC1Composite - 1][lWordNum] |= lBitMask;
+      vfCompositeCunningham1[lCandidateLayer + nCC1Composite - 1][lWordNum] |= lBitMask;
    }
 
-   if ((nCC2Composite > 0) && ((nCandidateLayer + nCC2Composite - 1) < nSieveChainLength))
+   if ((nCC2Composite > 0) && ((lCandidateLayer + nCC2Composite - 1) < lSieveChainLength))
    {
-      vfCompositeCunningham1[nCandidateLayer + nCC2Composite - 1][lWordNum] |= lBitMask;
+      vfCompositeCunningham1[lCandidateLayer + nCC2Composite - 1][lWordNum] |= lBitMask;
    }
 }

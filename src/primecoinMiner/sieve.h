@@ -8,6 +8,7 @@
 //
 extern uint32 vPrimesSize;
 extern std::vector<unsigned int> vPrimes;
+extern std::vector<unsigned int> vDoubledPrimes;
 
 #ifdef _M_X64
 typedef uint64 sieve_word_t;
@@ -26,6 +27,7 @@ class CSieveOfEratosthenes
    static const int nMinPrimeSeq = 4; // this is Prime number 11, the first prime with unknown factor status.
    //static const int nMaxWeaveMultiplier = 8; // This is the 9th prime (23) which will be the maximum number of individual weaves.
    unsigned int nSieveSize; // size of the sieve
+   unsigned int nHalfSieveSize; // half size of the sieve
    unsigned int nSieveExtension;
    unsigned int nChainLength;
    unsigned int nBTCC1ChainLength;
@@ -143,7 +145,7 @@ class CSieveOfEratosthenes
 
       if (extendedPrimeCount >= (*nExtendedPrimes)[multiplierPos].size())
       {
-         (*nExtendedPrimes)[multiplierPos].resize(extendedPrimeCount * 1.5);
+         (*nExtendedPrimes)[multiplierPos].resize(extendedPrimeCount * 2);
       }
       (*nExtendedPrimes)[multiplierPos][extendedPrimeCount] = &*primeMultiplier;
       primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
@@ -152,7 +154,7 @@ class CSieveOfEratosthenes
    void AddMultiplier(std::vector<primeMultiplier_t>* nPrimeMultipliers, std::vector<std::vector<primeMultiplier_t*>>* nExtendedPrimes, 
       std::vector<unsigned int>* nExtendedPrimeCounters, const unsigned int nCurrentMuliplierRound, const unsigned int nPrime, const unsigned int nPrimeSeq, const unsigned int nSolvedMultiplier)
    {
-      const unsigned int lSieveSize = this->nSieveSize;
+      const unsigned int lHalfSieveSize = this->nHalfSieveSize;
       const unsigned int lSolvedMultiplier = (nSolvedMultiplier % 2) ? nSolvedMultiplier : (nSolvedMultiplier + nPrime);
 #ifdef _DEBUG
       //assert(nPrime < 0x7FFFFFFF);
@@ -161,7 +163,7 @@ class CSieveOfEratosthenes
 
       (*nPrimeMultipliers)[nPrimeSeq].nMultiplierCandidate = lSolvedMultiplier;
 
-      if (nPrime > (lSieveSize / 2))
+      if (nPrime > lHalfSieveSize)
       {
          UpdateExtendedMultiplierList(nCurrentMuliplierRound, lSolvedMultiplier, &(*nPrimeMultipliers)[nPrimeSeq], nExtendedPrimes, nExtendedPrimeCounters);
       }
