@@ -1596,7 +1596,7 @@ int jhMiner_main_gbtMode()
          }
       }
       lastBlockCount = currentBlockCount;
-      Sleep(200);
+      Sleep(1000);
    }
    return 0;
 }
@@ -1625,7 +1625,7 @@ int jhMiner_main_getworkMode()
          }
       }
       lastBlockCount = currentBlockCount;
-      Sleep(200);
+      Sleep(1000);
    }
    return 0;
 }
@@ -1713,7 +1713,7 @@ int main(int argc, char **argv)
    commandlineInput.numThreads = max(commandlineInput.numThreads, 1);
    commandlineInput.sieveSize = 1024000; // default maxSieveSize
    commandlineInput.numPrimes = 25000; // default 
-   commandlineInput.primorialMultiplier = 61; // for default we use 61
+   commandlineInput.primorialMultiplier = 43; // for default we use 43
    commandlineInput.targetOverride = 0;
    commandlineInput.targetBTOverride = 0;
    commandlineInput.printDebug = 0;

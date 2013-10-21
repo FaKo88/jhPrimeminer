@@ -962,23 +962,23 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
          int minLengthMultiplier,maxLengthMultiplier,chainLengthModifier;
          minLengthMultiplier = maxLengthMultiplier= 0;
          chainLengthModifier = (nCandidateType == PRIME_CHAIN_BI_TWIN) ? 2 : 1;
-         // Check for a chain greater than min chain length that we can maximise share count from.
-         if (nProbableChainLength >= (nBitsForStats + (chainLengthModifier << 24)))
-         {
-            // Calculate how many lesser value shares we can glean
-            maxLengthMultiplier = (nProbableChainLength >> 24) - (nBitsForStats >> 24);
-            if ((nProbableChainLength - (maxLengthMultiplier << 24)) < nBitsForStats) maxLengthMultiplier--;
-            maxLengthMultiplier /= chainLengthModifier; // factor down by chain length modifier
-            if (nProbableChainLength >= block->serverData.nBitsForShare)
-            {
-               // This is a block solving share - make sure we extract max share value.
-               minLengthMultiplier = 1;
-               while (block->nBits < (nProbableChainLength - ((minLengthMultiplier * chainLengthModifier) << 24)))
-               {
-                  minLengthMultiplier++;
-               }
-            }
-         }
+         //// Check for a chain greater than min chain length that we can maximise share count from.
+         //if (nProbableChainLength >= (nBitsForStats + (chainLengthModifier << 24)))
+         //{
+         //   // Calculate how many lesser value shares we can glean
+         //   maxLengthMultiplier = (nProbableChainLength >> 24) - (nBitsForStats >> 24);
+         //   if ((nProbableChainLength - (maxLengthMultiplier << 24)) < nBitsForStats) maxLengthMultiplier--;
+         //   maxLengthMultiplier /= chainLengthModifier; // factor down by chain length modifier
+         //   if (nProbableChainLength >= block->serverData.nBitsForShare)
+         //   {
+         //      // This is a block solving share - make sure we extract max share value.
+         //      minLengthMultiplier = 1;
+         //      while (block->nBits < (nProbableChainLength - ((minLengthMultiplier * chainLengthModifier) << 24)))
+         //      {
+         //         minLengthMultiplier++;
+         //      }
+         //   }
+         //}
 
          for (int i = maxLengthMultiplier; i >= 0; i--)
          {

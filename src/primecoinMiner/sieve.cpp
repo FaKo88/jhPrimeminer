@@ -333,48 +333,6 @@ vfCompositeCunningham2[layerSeq][i] = thisCC2Word;
 }
 */
 
-void CSieveOfEratosthenes::ProcessPrimeMultiplier(std::vector<sieve_word_t>* nComposites, primeMultiplier_t* multiplierToProcess, const unsigned int nPrime, unsigned int& solvedMultiplier)
-{
-   const unsigned int lSieveSize = this->nSieveSize;
-   const unsigned int lHalfSieveSize = lSieveSize /2;
-   const unsigned int lWordBits = this->nWordBits;
-   const unsigned int lCandidatesWords = this->nCandidatesWords;
-
-   solvedMultiplier = multiplierToProcess->nMultiplierCandidate;
-
-   // Optimisation to reduce duplicate calc/check overhead
-   //if ((!layerSeq) && (variableMultiplier < lHalfSieveSize))
-   //{
-   //   variableMultiplier += (lHalfSieveSize - variableMultiplier + prime - 1) / prime * prime;
-   //}
-
-#ifdef USE_ROTATE
-   const unsigned int rotateBits = nPrime % lWordBits;
-   sieve_word_t bitMask = GetCompositeBitMask(solvedMultiplier);
-   for (; solvedMultiplier < lSieveSize; solvedMultiplier += nPrime)
-   {
-      const unsigned int variableWordNum = GetCandidateWordNum(solvedMultiplier);
-#ifdef _DEBUG
-      assert(!solvedMultiplier || (solvedMultiplier % 2)); // variable multiplier must be 0 or odd;
-      assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
-#endif
-      (*nComposites)[variableWordNum] |= bitMask;
-      bitMask = (bitMask << rotateBits) | (bitMask >> (lWordBits - rotateBits));
-   }
-#else
-   for (; solvedMultiplier < lSieveSize; solvedMultiplier += prime)
-   {
-      const unsigned int variableWordNum = GetCandidateWordNum(solvedMultiplier);
-      const sieve_word_t bitMask = GetCompositeBitMask(solvedMultiplier);
-#ifdef _DEBUG
-      assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
-#endif
-      (*nComposites)[variableWordNum] |= bitMask;
-   }
-#endif
-
-}
-
 void CSieveOfEratosthenes::Weave()
 {
    primeStats.nSieveRounds++;
