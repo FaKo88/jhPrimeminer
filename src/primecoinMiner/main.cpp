@@ -39,6 +39,26 @@ typedef struct
 
 getBlockTemplateData_t getBlockTemplateData = {0};
 
+typedef struct  
+{
+   char* workername;
+   char* workerpass;
+   char* host;
+   sint32 port;
+   bool useXPT;
+   sint32 numThreads;
+   sint32 sieveSize;
+   sint32 numPrimes;
+   sint32 primorialMultiplier;
+   sint32 targetOverride;
+   sint32 targetBTOverride;
+   bool printDebug;
+   bool enableAutoTune;
+   // getblocktemplate stuff
+   char* xpmAddress; // we will use this XPM address for block payout
+}commandlineInput_t;
+
+commandlineInput_t commandlineInput = {0};
 
 bool error(const char *format, ...)
 {
@@ -763,7 +783,7 @@ int jhMiner_workerThread_getwork(int threadIndex)
       // ypool uses a special encrypted serverData value to speedup identification of merkleroot and share data
       memcpy(&primecoinBlock.serverData, serverData, 32);
       // start mining
-      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex))
+      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex, commandlineInput.numThreads))
          break;
       primecoinBlock.mpzPrimeChainMultiplier = 0;
    }
@@ -836,7 +856,7 @@ int jhMiner_workerThread_gbt(int threadIndex)
       LeaveCriticalSection(&workData.cs);
       primecoinBlock.xptMode = false;
       // start mining
-      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex))
+      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex, commandlineInput.numThreads))
          break;
       primecoinBlock.mpzPrimeChainMultiplier = 0;
    }
@@ -879,7 +899,7 @@ int jhMiner_workerThread_xpt(int threadIndex)
       memcpy(&primecoinBlock.serverData, serverData, 32);
       // start mining
       //uint32 time1 = GetTickCount();
-      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex))
+      if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex, commandlineInput.numThreads))
          break;
       //printf("Mining stopped after %dms\n", GetTickCount()-time1);
       primecoinBlock.mpzPrimeChainMultiplier = 0;
@@ -892,27 +912,6 @@ int jhMiner_workerThread_xpt(int threadIndex)
 
    return 0;
 }
-
-typedef struct  
-{
-   char* workername;
-   char* workerpass;
-   char* host;
-   sint32 port;
-   bool useXPT;
-   sint32 numThreads;
-   sint32 sieveSize;
-   sint32 numPrimes;
-   sint32 primorialMultiplier;
-   sint32 targetOverride;
-   sint32 targetBTOverride;
-   bool printDebug;
-   bool enableAutoTune;
-   // getblocktemplate stuff
-   char* xpmAddress; // we will use this XPM address for block payout
-}commandlineInput_t;
-
-commandlineInput_t commandlineInput = {0};
 
 void jhMiner_printHelp()
 {
