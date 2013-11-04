@@ -54,8 +54,7 @@ class CSieveOfEratosthenes
    std::vector<sieve_word_t> vfCandidateCunningham1;
 
    // bitsets that can be combined to obtain the final bitset of candidates
-   std::vector<std::vector<sieve_word_t>> vfCompositeCunningham1;
-   std::vector<std::vector<sieve_word_t>> vfCompositeCunningham2;
+   std::vector<std::vector<sieve_word_t>> vfComposites;
 
    // multipliers split into sieve segments.
    std::vector<std::vector<primeMultiplier_t>> vfCC1PrimeMultipliers;
@@ -173,10 +172,9 @@ class CSieveOfEratosthenes
 
    //void ReUsePreviouslyWovenValues(const unsigned int layerSeq);
 
-   void ProcessPrimeMultiplier(std::vector<sieve_word_t>* nComposites, primeMultiplier_t* multiplierToProcess, const unsigned int nPrime, unsigned int& solvedMultiplier)
+   void ProcessPrimeMultiplier(std::vector<sieve_word_t>* nComposites, const primeMultiplier_t* multiplierToProcess, const unsigned int nPrime, unsigned int& solvedMultiplier, const int compositeOffset)
    {
       const unsigned int lSieveSize = this->nSieveSize;
-      const unsigned int lHalfSieveSize = lSieveSize /2;
       const unsigned int lWordBits = this->nWordBits;
       const unsigned int lCandidatesWords = this->nCandidatesWords;
 
@@ -190,13 +188,15 @@ class CSieveOfEratosthenes
 
 #ifdef USE_ROTATE
       const unsigned int rotateBits = nPrime % lWordBits;
-      sieve_word_t bitMask = GetCompositeBitMask(solvedMultiplier);
+      sieve_word_t bitMask = GetCompositeBitMask(solvedMultiplier + compositeOffset);
       for (; solvedMultiplier < lSieveSize; solvedMultiplier += nPrime)
       {
          const unsigned int variableWordNum = GetCandidateWordNum(solvedMultiplier);
 #ifdef _DEBUG
-         assert(!solvedMultiplier || (solvedMultiplier % 2)); // variable multiplier must be 0 or odd;
+         assert(solvedMultiplier % 2); // variable multiplier odd;
          assert(variableWordNum < lCandidatesWords); // make sure wordnum does not exceed candidate wordsize.
+         const unsigned int realVariableWordNum = GetCandidateWordNum(solvedMultiplier + compositeOffset);
+         assert(variableWordNum == realVariableWordNum); // make sure variable word num is what it should be.
 #endif
          (*nComposites)[variableWordNum] |= bitMask;
          bitMask = (bitMask << rotateBits) | (bitMask >> (lWordBits - rotateBits));
@@ -212,7 +212,6 @@ class CSieveOfEratosthenes
          (*nComposites)[variableWordNum] |= bitMask;
       }
 #endif
-
    }
 
    void Weave();

@@ -52,8 +52,7 @@ CSieveOfEratosthenes::~CSieveOfEratosthenes(void)
    vfCandidates.clear();
    vfCandidateCunningham1.clear();
    vfCandidateBiTwin.clear();
-   vfCompositeCunningham1.clear();
-   vfCompositeCunningham2.clear();
+   vfComposites.clear();
    vfCC1PrimeMultipliers.clear();
    vfCC2PrimeMultipliers.clear();
    vfExtendedCC1PrimesToWeave.clear();
@@ -119,17 +118,13 @@ void CSieveOfEratosthenes::Init(unsigned int nSieveSize, unsigned int numPrimes,
    {
       if (oldCandidateWords != 0)
       {
-         vfCompositeCunningham1.clear();
-         vfCompositeCunningham2.clear();
+         vfComposites.clear();
       }
-      vfCompositeCunningham1.resize(this->nSieveChainLength);
-      vfCompositeCunningham2.resize(this->nSieveChainLength);
+      vfComposites.resize(this->nSieveChainLength);
       for (int i = 0; i < nSieveChainLength; i++)
       {
-         vfCompositeCunningham1[i].resize(this->nCandidatesWords);
-         vfCompositeCunningham2[i].resize(this->nCandidatesWords);
-         memset(&vfCompositeCunningham1[i][0], 0, nCandidatesBytes);
-         memset(&vfCompositeCunningham2[i][0], 0, nCandidatesBytes);
+         vfComposites[i].resize(this->nCandidatesWords);
+         memset(&vfComposites[i][0], 0, nCandidatesBytes);
       }
    }
 
@@ -361,8 +356,7 @@ void CSieveOfEratosthenes::Weave()
 
    for (int layerSeq = 0; layerSeq < lSieveChainLength; layerSeq++)
    {
-      memset(&vfCompositeCunningham1[layerSeq][0], 0, nCandidatesBytes);
-      memset(&vfCompositeCunningham2[layerSeq][0], 0, nCandidatesBytes);
+      memset(&vfComposites[layerSeq][0], 0, nCandidatesBytes);
 
       // Try reuse already woven values.
       //ReUsePreviouslyWovenValues(layerSeq);
@@ -375,12 +369,12 @@ void CSieveOfEratosthenes::Weave()
          primeMultiplier = &vfCC1PrimeMultipliers[layerSeq][i];
          if (primeMultiplier->nMultiplierCandidate == 0xFFFFFFFF) continue;
          unsigned int solvedMultiplier;
-         ProcessPrimeMultiplier(&vfCompositeCunningham1[layerSeq], primeMultiplier, nPrime, solvedMultiplier);
+         ProcessPrimeMultiplier(&vfComposites[layerSeq], primeMultiplier, nPrime, solvedMultiplier, 0);
          primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
 
          primeMultiplier = &vfCC2PrimeMultipliers[layerSeq][i];
          //if (primeMultiplier->nMultiplierCandidate == 0xFFFFFFFF) continue;
-         ProcessPrimeMultiplier(&vfCompositeCunningham2[layerSeq], primeMultiplier, nPrime, solvedMultiplier);
+         ProcessPrimeMultiplier(&vfComposites[layerSeq], primeMultiplier, nPrime, solvedMultiplier, -1);
          primeMultiplier->nMultiplierCandidate = solvedMultiplier % lSieveSize;
       }
 
@@ -391,7 +385,7 @@ void CSieveOfEratosthenes::Weave()
          primeMultiplier = vfExtendedCC1PrimesToWeave[layerSeq][multiplierPos][i];
          const uint64 primePos = primeMultiplier - &vfCC1PrimeMultipliers[layerSeq][0];
          unsigned int solvedMultiplier;
-         ProcessPrimeMultiplier(&vfCompositeCunningham1[layerSeq], primeMultiplier, (vPrimes[primePos] << 1), solvedMultiplier);
+         ProcessPrimeMultiplier(&vfComposites[layerSeq], primeMultiplier, (vPrimes[primePos] << 1), solvedMultiplier, 0);
          UpdateExtendedMultiplierList(multiplierPos, solvedMultiplier, primeMultiplier, &vfExtendedCC1PrimesToWeave[layerSeq], &vfCC1ExtendedPrimeCounters[layerSeq]);
       }
       const unsigned int numCC2ExtendedPrimeMultipliers = vfCC2ExtendedPrimeCounters[layerSeq][multiplierPos];
@@ -400,7 +394,7 @@ void CSieveOfEratosthenes::Weave()
          primeMultiplier = vfExtendedCC2PrimesToWeave[layerSeq][multiplierPos][i];
          const uint64 primePos = primeMultiplier - &vfCC2PrimeMultipliers[layerSeq][0];
          unsigned int solvedMultiplier;
-         ProcessPrimeMultiplier(&vfCompositeCunningham2[layerSeq], primeMultiplier, (vPrimes[primePos] << 1), solvedMultiplier);
+         ProcessPrimeMultiplier(&vfComposites[layerSeq], primeMultiplier, (vPrimes[primePos] << 1), solvedMultiplier, -1);
          UpdateExtendedMultiplierList(multiplierPos, solvedMultiplier, primeMultiplier, &vfExtendedCC2PrimesToWeave[layerSeq], &vfCC2ExtendedPrimeCounters[layerSeq]);
       }
 
@@ -453,26 +447,32 @@ void CSieveOfEratosthenes::UpdateCandidateValues()
       {
          for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
          {
-            vfCandidates[wordNo] |= vfCompositeCunningham2[lCompositeIndex][wordNo];
-            vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[lCompositeIndex][wordNo];
-            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[lCompositeIndex][wordNo] | vfCompositeCunningham2[lCompositeIndex][wordNo];
+            const sieve_word_t cc1OrVal = vfComposites[lCompositeIndex][wordNo] ;
+            const sieve_word_t cc2OrVal = cc1OrVal << 1;
+            vfCandidateCunningham1[wordNo] |= cc1OrVal;
+            vfCandidates[wordNo] |= cc2OrVal;
+            vfCandidateBiTwin[wordNo] |=  cc1OrVal | cc2OrVal;
          }
       }
       else if (fUpdateBiTwinForCC1)
       {
          for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
          {
-            vfCandidates[wordNo] |= vfCompositeCunningham2[lCompositeIndex][wordNo];
-            vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[lCompositeIndex][wordNo];
-            vfCandidateBiTwin[wordNo] |=  vfCompositeCunningham1[lCompositeIndex][wordNo];
+            const sieve_word_t cc1OrVal = vfComposites[lCompositeIndex][wordNo] ;
+            const sieve_word_t cc2OrVal = cc1OrVal << 1;
+            vfCandidateCunningham1[wordNo] |= cc1OrVal;
+            vfCandidateBiTwin[wordNo] |=  cc1OrVal;
+            vfCandidates[wordNo] |= cc2OrVal;
          }
       }
       else
       {
          for (int wordNo = 0; wordNo < lCandidateWords; wordNo++)
          {
-            vfCandidates[wordNo] |= vfCompositeCunningham2[lCompositeIndex][wordNo];
-            vfCandidateCunningham1[wordNo] |= vfCompositeCunningham1[lCompositeIndex][wordNo];
+            const sieve_word_t cc1OrVal = vfComposites[lCompositeIndex][wordNo] ;
+            const sieve_word_t cc2OrVal = cc1OrVal << 1;
+            vfCandidateCunningham1[wordNo] |= cc1OrVal;
+            vfCandidates[wordNo] |= cc2OrVal;
          }
       }
 
@@ -550,7 +550,7 @@ bool CSieveOfEratosthenes::GetNextCandidateMultiplier(unsigned int& nVariableMul
       lBits = vfCandidates[lWordNum];
       if (nCandidateMultiplier % nWordBits == 1)
       {
-         while (lBits == 0x5555555555555555 && nCandidateMultiplier < nSieveSize)
+         while (lBits == 1 && nCandidateMultiplier < nSieveSize)
          {
             // Skip an entire word
             nCandidateMultiplier += nWordBits;
@@ -602,16 +602,23 @@ void CSieveOfEratosthenes::UpdateLastCandidatePrimality(const unsigned char nCC1
 {
    const unsigned int lCandidateLayer = (unsigned int)this->nCandidateLayer;
    const unsigned int lSieveChainLength = this->nSieveChainLength;
-   const unsigned int lWordNum = GetCandidateWordNum(nCandidateMultiplier);
-   const sieve_word_t lBitMask = GetCompositeBitMask(nCandidateMultiplier);
+   const unsigned int lWordNum = GetCandidateWordNum(nCandidateMultiplier); 
 
    if ((nCC1Composite > 0) && ((lCandidateLayer + nCC1Composite - 1) < lSieveChainLength))
    {
-      vfCompositeCunningham1[lCandidateLayer + nCC1Composite - 1][lWordNum] |= lBitMask;
+      const sieve_word_t lBitMask = GetCompositeBitMask(nCandidateMultiplier);
+      vfComposites[lCandidateLayer + nCC1Composite - 1][lWordNum] |= lBitMask;
    }
 
    if ((nCC2Composite > 0) && ((lCandidateLayer + nCC2Composite - 1) < lSieveChainLength))
    {
-      vfCompositeCunningham1[lCandidateLayer + nCC2Composite - 1][lWordNum] |= lBitMask;
+
+#ifdef _DEBUG
+      const unsigned int lWordNumCC2 = GetCandidateWordNum(nCandidateMultiplier - 1); 
+      assert(lWordNum == lWordNumCC2); // Must be same word despite offset..
+#endif
+
+      const sieve_word_t lBitMask = GetCompositeBitMask(nCandidateMultiplier - 1); // CC2 Composite position is offset by 1
+      vfComposites[lCandidateLayer + nCC2Composite - 1][lWordNum] |= lBitMask;
    }
 }
