@@ -187,6 +187,7 @@ typedef struct
    serverData_t serverData;
    uint32 threadIndex; // the index of the miner thread
    bool xptMode;
+   uint32 miningVersion;
 	// getblocktemplate data
 	uint32 seed;
 }primecoinBlock_t;

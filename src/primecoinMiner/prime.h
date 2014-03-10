@@ -72,7 +72,11 @@ void PrimorialAt(mpz_class& bn, mpz_class& mpzPrimorial);
 //bool ProbablePrimeChainTest(const CBigNum& bnPrimeChainOrigin, unsigned int nBits, bool fFermatTest, unsigned int& nChainLengthCunningham1, unsigned int& nChainLengthCunningham2, unsigned int& nChainLengthBiTwin);
 bool ProbablePrimeChainTest(const mpz_class& bnPrimeChainOrigin, unsigned int nBits, bool fFermatTest, unsigned int& nChainLengthCunningham1, unsigned int& nChainLengthCunningham2, unsigned int& nChainLengthBiTwin, bool fullTest =false);
 bool ProbablePrimeChainTestOrig(const mpz_class& bnPrimeChainOrigin, unsigned int nBits, bool fFermatTest, unsigned int& nChainLengthCunningham1, unsigned int& nChainLengthCunningham2, unsigned int& nChainLengthBiTwin, bool fullTest =false);
-
+// Perform Fermat test with trial division
+// Return values:
+//   true  - passes trial division test and Fermat test; probable prime
+//   false - failed either trial division or Fermat test; composite
+bool ProbablePrimalityTestWithTrialDivision(const mpz_class& mpzCandidate, unsigned int nTrialDivisionLimit);
 
 static const unsigned int nFractionalBits = 24;
 static const unsigned int TARGET_FRACTIONAL_MASK = (1u<<nFractionalBits) - 1;

@@ -20,29 +20,35 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
 
    static const unsigned int MAX_NONCE = 0xFFFF0000; // From Primecoind sources.
    static const unsigned int nPrimorialHashFactor = 7;
-   const unsigned int nPrimorialMultiplierStart = 61;   
-   const unsigned int nPrimorialMultiplierMax = 79;
 
-   unsigned int nPrimorialMultiplier = primeStats.nPrimorialMultiplier;
    int64 nTimeExpected = 0;   // time expected to prime chain (micro-second)
    int64 nTimeExpectedPrev = 0; // time expected to prime chain last time
    bool fIncrementPrimorial = true; // increase or decrease primorial factor
    int64 nSieveGenTime = 0;
 
-	// Generate a thread specific nonce.
-	primecoinBlock->nonce = threadIndex;
+   // Generate a thread specific nonce.
+   primecoinBlock->nonce = threadIndex;
 
    uint32 nTime = GetTickCount() + 1000*600;
-
    uint32 nStatTime = GetTickCount() + 2000;
 
-   // note: originally a wanted to loop as long as (primecoinBlock->workDataHash != jhMiner_getCurrentWorkHash()) did not happen
-   //		 but I noticed it might be smarter to just check if the blockHeight has changed, since that is what is really important
-   uint32 loopCount = 0;
-
-   //mpz_class mpzHashFactor;
-   //Primorial(nPrimorialHashFactor, mpzHashFactor);
    unsigned int nHashFactor = PrimorialFast(nPrimorialHashFactor);
+   unsigned int nPrimorialMultiplier = primeStats.nPrimorialMultiplier;
+   mpz_class mpzPrimorial;
+   Primorial(nPrimorialMultiplier, mpzPrimorial);
+   mpz_class mpzFixedMultiplier;
+   if (primecoinBlock->miningVersion >= 2)
+   {
+      mpzFixedMultiplier = mpzPrimorial;
+   }
+   else
+   {
+      if (mpzPrimorial > nHashFactor) {
+         mpzFixedMultiplier = mpzPrimorial / nHashFactor;
+      } else {
+         mpzFixedMultiplier = 1;
+      }		
+   }
 
    time_t unixTimeStart;
    time(&unixTimeStart);
@@ -63,66 +69,59 @@ bool BitcoinMiner(primecoinBlock_t* primecoinBlock, CSieveOfEratosthenes*& psiev
          if( newTimestamp != primecoinBlock->timestamp )
          {
             primecoinBlock->timestamp = newTimestamp;
-				primecoinBlock->nonce = threadIndex;
-            //nPrimorialMultiplierStart = startFactorList[(threadIndex&3)];
-		      //nPrimorialMultiplier = nPrimorialMultiplierStart;
+            primecoinBlock->nonce = threadIndex;
          }
          nLastRollTime = nCurrentTick;
       }
 
-      primecoinBlock_generateHeaderHash(primecoinBlock, primecoinBlock->blockHeaderHash.begin());
       //
       // Search
       //
       bool fNewBlock = true;
       // Primecoin: try to find hash divisible by primorial
-      uint256 phash = primecoinBlock->blockHeaderHash;
       mpz_class mpzHash;
-      mpz_set_uint256(mpzHash.get_mpz_t(), phash);
-
-		while ((phash < hashBlockHeaderLimit || !mpz_divisible_ui_p(mpzHash.get_mpz_t(), nHashFactor)) && primecoinBlock->nonce < MAX_NONCE) {
-			primecoinBlock->nonce += nonceStep;
-         primecoinBlock_generateHeaderHash(primecoinBlock, primecoinBlock->blockHeaderHash.begin());
-         phash = primecoinBlock->blockHeaderHash;
-         mpz_set_uint256(mpzHash.get_mpz_t(), phash);
-      }
-      //printf("Use nonce %d\n", primecoinBlock->nonce);
-		if (primecoinBlock->nonce >= MAX_NONCE)
+      while (true)
       {
-			//printf("Nonce overflow\n");
+         primecoinBlock->nonce += nonceStep;
+         if (primecoinBlock->nonce >= MAX_NONCE) 
+            break;
+
+         // Verify the block hash is valid
+         primecoinBlock_generateHeaderHash(primecoinBlock, primecoinBlock->blockHeaderHash.begin());
+         uint256 phash = primecoinBlock->blockHeaderHash;
+         if (phash < hashBlockHeaderLimit) 
+            continue;
+
+         // Test hash is usable.
+         mpz_set_uint256(mpzHash.get_mpz_t(), phash);
+         if (primecoinBlock->miningVersion >= 2)
+         {
+            // Try to find hash that is probable prime
+            if (!ProbablePrimalityTestWithTrialDivision(mpzHash, 1000))
+               continue;
+         } else {
+            // Primecoin: Check that the hash is divisible by the fixed primorial
+            if (!mpz_divisible_ui_p(mpzHash.get_mpz_t(), nHashFactor))
+               continue;
+         }
+
+         // Hash has passed required tests, use it.
          break;
       }
-      // Primecoin: primorial fixed multiplier
-      mpz_class mpzPrimorial;
-      Primorial(nPrimorialMultiplier, mpzPrimorial);
-
-      mpz_class mpzMultiplierMin = mpzPrimeMin * nHashFactor / mpzHash + 1;
-      while (mpzPrimorial < mpzMultiplierMin )
+      //printf("Use nonce %d\n", primecoinBlock->nonce);
+      if (primecoinBlock->nonce >= MAX_NONCE)
       {
-         if (!PrimeTableGetNextPrime(nPrimorialMultiplier))
-            error("PrimecoinMiner() : primorial minimum overflow");
-         Primorial(nPrimorialMultiplier, mpzPrimorial);
+         break;
       }
-      mpz_class mpzFixedMultiplier;
-      if (mpzPrimorial > nHashFactor) {
-         mpzFixedMultiplier = mpzPrimorial / nHashFactor;
-      } else {
-         mpzFixedMultiplier = 1;
-      }		
-      //printf("fixedMultiplier: %d nPrimorialMultiplier: %d\n", BN_get_word(&bnFixedMultiplier), nPrimorialMultiplier);
+
       // Primecoin: mine for prime chain
-		MineProbablePrimeChain(psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, threadIndex, mpzHash, nPrimorialMultiplier);
+      MineProbablePrimeChain(psieve, primecoinBlock, mpzFixedMultiplier, fNewBlock, threadIndex, mpzHash, nPrimorialMultiplier);
       threadHearthBeat[threadIndex] = GetTickCount();
       if (appQuitSignal)
       {
          printf( "Shutting down mining thread %d.\n", threadIndex);
          return false;
       }
-      nPrimorialMultiplier = primeStats.nPrimorialMultiplier;
-
-		primecoinBlock->nonce += nonceStep;
-      //primecoinBlock->timestamp = max(primecoinBlock->timestamp, (unsigned int) time(NULL));
-      loopCount++;
    }
 
    return true;

@@ -54,6 +54,7 @@ typedef struct
    sint32 targetBTOverride;
    bool printDebug;
    bool enableAutoTune;
+   uint32 miningVersion; 
    // getblocktemplate stuff
    char* xpmAddress; // we will use this XPM address for block payout
 }commandlineInput_t;
@@ -779,7 +780,8 @@ int jhMiner_workerThread_getwork(int threadIndex)
       // we abuse the timestamp field to generate an unique hash for each worker thread...
       primecoinBlock.timestamp += threadIndex;
       primecoinBlock.threadIndex = threadIndex;
-      primecoinBlock.xptMode = (workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH);
+      primecoinBlock.xptMode = false; //(workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH);
+      primecoinBlock.miningVersion = commandlineInput.miningVersion;
       // ypool uses a special encrypted serverData value to speedup identification of merkleroot and share data
       memcpy(&primecoinBlock.serverData, serverData, 32);
       // start mining
@@ -855,6 +857,7 @@ int jhMiner_workerThread_gbt(int threadIndex)
       bitclient_destroyTransaction(txCoinbase);
       LeaveCriticalSection(&workData.cs);
       primecoinBlock.xptMode = false;
+      primecoinBlock.miningVersion = commandlineInput.miningVersion;
       // start mining
       if (!BitcoinMiner(&primecoinBlock, psieve, threadIndex, commandlineInput.numThreads))
          break;
@@ -895,6 +898,7 @@ int jhMiner_workerThread_xpt(int threadIndex)
       primecoinBlock.timestamp += threadIndex;
       primecoinBlock.threadIndex = threadIndex;
       primecoinBlock.xptMode = (workData.protocolMode == MINER_PROTOCOL_XPUSHTHROUGH);
+      primecoinBlock.miningVersion = commandlineInput.miningVersion;
       // ypool uses a special encrypted serverData value to speedup identification of merkleroot and share data
       memcpy(&primecoinBlock.serverData, serverData, 32);
       // start mining
@@ -929,6 +933,8 @@ void jhMiner_printHelp()
    puts("   -d <num>                      Set Number of primes to weave with - range from 1000 - 250000");
    puts("                                     Default is 15 and it's not recommended to use lower values than 8.");
    puts("                                     It limits how many base primes are used to filter out candidate multipliers in the sieve.");
+   puts("   -v <num>                      Set Mining Version - range from 1 - 2");
+   puts("                                     Default is 1.");
    puts("   -tune <flag>                  Set a flag to control the auto tune functions");
    puts("   -xpm <wallet address>         When doing solo mining this is the address your mined XPM will be transfered to.");
    puts("Example usage:");
@@ -1093,6 +1099,22 @@ void jhMiner_parseCommandline(int argc, char **argv)
          }
          cIdx++;
       }
+      else if( memcmp(argument, "-miningVersion", 14)==0 )
+      {
+         // -miningVersion
+         if( cIdx >= argc )
+         {
+            printf("Missing number after -miningVersion option\n");
+            exit(0);
+         }
+         commandlineInput.miningVersion = atoi(argv[cIdx]);
+         if( commandlineInput.miningVersion < 1 || commandlineInput.miningVersion > 2 )
+         {
+            printf("-miningVersion parameter out of range, must be between 1 - 2");
+            exit(0);
+         }
+         cIdx++;
+      }
       else if( memcmp(argument, "-tune", 5)==0 )
       {
          // -tune
@@ -1201,6 +1223,7 @@ void PrintCurrentSettings()
    printf("Primorial Multiplier (-m): %u\n", primeStats.nPrimorialMultiplier);
    printf("Chain Length Target (-target): %u\n", nOverrideTargetValue);	
    printf("BiTwin Length Target (-bttarget): %u\n", nOverrideBTTargetValue);	
+   printf("Mining Version (-miningVersion): %u\n", commandlineInput.miningVersion);	
    if (nEnableAutoTune)
    {
       printf("Auto Tune: %s\n", (primeStats.bAutoTuneComplete) ? "enabled (Completed)" : "enabled (In Progress)" );	
@@ -1717,6 +1740,7 @@ int main(int argc, char **argv)
    commandlineInput.targetBTOverride = 0;
    commandlineInput.printDebug = 0;
    commandlineInput.enableAutoTune = 1;
+   commandlineInput.miningVersion = 1;
 
    // parse command lines
    jhMiner_parseCommandline(argc, argv);
@@ -1753,7 +1777,7 @@ int main(int argc, char **argv)
    // print header
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-   printf("\xBA  jhPrimeMiner - Mod by rdebourbon -v4.0f beta                 \xBA\n");
+   printf("\xBA  jhPrimeMiner - Mod by rdebourbon -v4.0G beta                 \xBA\n");
    printf("\xBA                                                               \xBA\n");
    printf("\xBA  Original Author: JH (http://ypool.net)                       \xBA\n");
    printf("\xBA  Credits: Sunny King for the original Primecoin client&miner  \xBA\n");

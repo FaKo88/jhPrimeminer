@@ -335,8 +335,6 @@ static bool FermatProbablePrimalityTestFast(const mpz_class& n, unsigned int& nL
    return false;
 }
 
-
-
 // Test probable primality of n = 2p +/- 1 based on Euler, Lagrange and Lifchitz
 // fSophieGermain:
 //   true:  n = 2p+1, p prime, aka Cunningham Chain of first kind
@@ -854,6 +852,34 @@ static bool ProbablePrimeChainTestFast(const mpz_class& mpzPrimeChainOrigin, CPr
    }
 
    return (nChainLength >= nBits);
+}
+
+// Perform Fermat test with trial division
+// Return values:
+//   true  - passes trial division test and Fermat test; probable prime
+//   false - failed either trial division or Fermat test; composite
+bool ProbablePrimalityTestWithTrialDivision(const mpz_class& mpzCandidate, unsigned int nTrialDivisionLimit)
+{
+   unsigned int nDivisor = 2 * 3 * 5 * 7 * 11 * 13 * 17 * 19 * 23;
+   unsigned int nDivisorPrimes = 9;
+
+   // Fast trial division for the first few primes
+   unsigned long nModulo = mpz_tdiv_ui(mpzCandidate.get_mpz_t(), nDivisor);
+   for (unsigned int i = 0; i < nDivisorPrimes; i++)
+   {
+      if (nModulo % vPrimes[i] == 0)
+         return false;
+   }
+
+   // Trial division
+   for (unsigned int i = nDivisorPrimes; i < nTrialDivisionLimit; i++)
+   {
+      if (mpz_divisible_ui_p(mpzCandidate.get_mpz_t(), vPrimes[i]))
+         return false;
+   }
+   unsigned int nLength = 0;
+   CPrimalityTestParams testParams(0,0);
+   return (FermatProbablePrimalityTestFast(mpzCandidate, nLength, testParams, true));
 }
 
 //// Sieve for mining
