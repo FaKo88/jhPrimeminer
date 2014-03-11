@@ -29,7 +29,7 @@ typedef struct
 }bitclientTransaction_t;
 
 bitclientTransaction_t* bitclient_createTransaction();
-bitclientTransaction_t* bitclient_createCoinbaseTransactionFromSeed(uint32 seed, uint32 seed_userId, uint32 blockHeight, uint8* pubKeyRipeHash, uint64 inputValue);
+bitclientTransaction_t* bitclient_createCoinbaseTransactionFromSeed(uint32 seed, uint32 seed_userId, uint32 blockHeight, uint8* pubKeyRipeHash, uint64 inputValue, double donatePercentage);
 void bitclient_destroyTransaction(bitclientTransaction_t* tx);
 void bitclient_writeTransactionToStream(stream_t* dataStream, bitclientTransaction_t* tx);
 void bitclient_generateTxHash(bitclientTransaction_t* tx, uint8* txHash);

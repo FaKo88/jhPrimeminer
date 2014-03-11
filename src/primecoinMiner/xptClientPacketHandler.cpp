@@ -1,6 +1,5 @@
 #include"global.h"
 #include <iostream>
-//#include"ticker.h"
 
 /*
  * Called when a packet with the opcode XPT_OPC_S_AUTH_ACK is received
@@ -127,9 +126,34 @@ bool xptClient_processPacket_shareAck(xptClient_t* xptClient)
 }
 
 /*
+ * Called when a packet with the opcode XPT_OPC_S_MESSAGE is received
+ */
+bool xptClient_processPacket_message(xptClient_t* xptClient)
+{
+	xptPacketbuffer_t* cpb = xptClient->recvBuffer;
+	// read data from the packet
+	xptPacketbuffer_beginReadPacket(cpb);
+	// start parsing
+	bool readError = false;
+	// read type field (not used yet)
+	uint32 messageType = xptPacketbuffer_readU8(cpb, &readError);
+	if( readError )
+		return false;
+	// read message text (up to 1024 bytes)
+	char messageText[1024];
+	xptPacketbuffer_readString(cpb, messageText, 1024, &readError);
+	messageText[1023] = '\0';
+	if( readError )
+		return false;
+	std::cout << "Server message: " << messageText << std::endl;
+	return true;
+}
+
+
+/*
  * Called when a packet with the opcode XPT_OPC_S_PING is received
  */
-bool xptClient_processPacket_client2ServerPing(xptClient_t* xptClient)
+bool xptClient_processPacket_ping(xptClient_t* xptClient)
 {
 	// parse block data
 	bool recvError = false;

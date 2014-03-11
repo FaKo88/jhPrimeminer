@@ -19,7 +19,9 @@ bool useGetBlockTemplate = true;
 uint8 decodedWalletAddress[32];
 int decodedWalletAddressLen;
 
-char* minerVersionString = "jhPrimeminer RdB v4 Beta";
+char* minerVersionString = "jhPrimeminer_RdB v4.0H";
+char* developerWallet = "AaGqyCJYBZcoij35SDpKeiRo6juwrwiKPS"; // Public address for RdB Donations
+char developerPubKeyRipeHash[20] = {202,236,237,52,146,19,16,126,102,130,151,38,73,196,175,49,244,222,141,210}; // Decoded version of RdB Donation address
 
 typedef struct  
 {
@@ -57,6 +59,7 @@ typedef struct
    uint32 miningVersion; 
    // getblocktemplate stuff
    char* xpmAddress; // we will use this XPM address for block payout
+   double donationPercentage;
 }commandlineInput_t;
 
 commandlineInput_t commandlineInput = {0};
@@ -359,7 +362,7 @@ bool jhMiner_pushShare_primecoin(uint8 data[512], primecoinBlock_t* primecoinBlo
       // write block data
       stream_writeData(blockStream, dataRaw, 80+1+lengthBN);
       // generate coinbase transaction
-      bitclientTransaction_t* txCoinbase = bitclient_createCoinbaseTransactionFromSeed(primecoinBlock->seed, primecoinBlock->threadIndex, getBlockTemplateData.height, decodedWalletAddress+1, jhMiner_primeCoin_targetGetMint(primecoinBlock->nBits));
+      bitclientTransaction_t* txCoinbase = bitclient_createCoinbaseTransactionFromSeed(primecoinBlock->seed, primecoinBlock->threadIndex, getBlockTemplateData.height, decodedWalletAddress+1, jhMiner_primeCoin_targetGetMint(primecoinBlock->nBits), commandlineInput.donationPercentage);
       // write amount of transactions (varInt)
       bitclient_addVarIntFromStream(blockStream, 1);
       bitclient_writeTransactionToStream(blockStream, txCoinbase);
@@ -845,7 +848,7 @@ int jhMiner_workerThread_gbt(int threadIndex)
       primecoinBlock.serverData.blockHeight = getBlockTemplateData.height;
       primecoinBlock.serverData.nBitsForShare = getBlockTemplateData.nBits;
       // generate coinbase transaction and merkleroot
-      bitclientTransaction_t* txCoinbase = bitclient_createCoinbaseTransactionFromSeed(primecoinBlock.seed, threadIndex, getBlockTemplateData.height, decodedWalletAddress+1, jhMiner_primeCoin_targetGetMint(primecoinBlock.nBits));
+      bitclientTransaction_t* txCoinbase = bitclient_createCoinbaseTransactionFromSeed(primecoinBlock.seed, threadIndex, getBlockTemplateData.height, decodedWalletAddress+1, jhMiner_primeCoin_targetGetMint(primecoinBlock.nBits), commandlineInput.donationPercentage);
       bitclientTransaction_t* txList[64];
       txList[0] = txCoinbase;
       uint32 numberOfTx = 1;
@@ -935,6 +938,8 @@ void jhMiner_printHelp()
    puts("                                     It limits how many base primes are used to filter out candidate multipliers in the sieve.");
    puts("   -v <num>                      Set Mining Version - range from 1 - 2");
    puts("                                     Default is 1.");
+   puts("   -f <num>                      Set developer donation percentage. Range from 0.0 - 10.0%");
+   puts("                                     Default is 2.0%");
    puts("   -tune <flag>                  Set a flag to control the auto tune functions");
    puts("   -xpm <wallet address>         When doing solo mining this is the address your mined XPM will be transfered to.");
    puts("Example usage:");
@@ -1115,6 +1120,22 @@ void jhMiner_parseCommandline(int argc, char **argv)
          }
          cIdx++;
       }
+      else if( memcmp(argument, "-f", 3)==0 )
+      {
+         // -donation percentage
+         if( cIdx >= argc )
+         {
+            printf("Missing number after -f option\n");
+            exit(0);
+         }
+         commandlineInput.donationPercentage = atof(argv[cIdx]);
+         if( commandlineInput.donationPercentage < 0.0 || commandlineInput.donationPercentage > 10.0 )
+         {
+            printf("-f parameter out of range, must be between 0.0 - 10.0");
+            exit(0);
+         }
+         cIdx++;
+      }
       else if( memcmp(argument, "-tune", 5)==0 )
       {
          // -tune
@@ -1224,6 +1245,7 @@ void PrintCurrentSettings()
    printf("Chain Length Target (-target): %u\n", nOverrideTargetValue);	
    printf("BiTwin Length Target (-bttarget): %u\n", nOverrideBTTargetValue);	
    printf("Mining Version (-miningVersion): %u\n", commandlineInput.miningVersion);	
+   printf("Donation Percentage (-f): %.02f%%\n", commandlineInput.donationPercentage);	
    if (nEnableAutoTune)
    {
       printf("Auto Tune: %s\n", (primeStats.bAutoTuneComplete) ? "enabled (Completed)" : "enabled (In Progress)" );	
@@ -1684,7 +1706,7 @@ int jhMiner_main_xptMode()
          xptWorkIdentifier = 0xFFFFFFFF;
          while( true )
          {
-            workData.xptClient = xptClient_connect(&jsonRequestTarget, commandlineInput.numThreads);
+            workData.xptClient = xptClient_connect(&jsonRequestTarget, commandlineInput.numThreads, commandlineInput.donationPercentage);
             if( workData.xptClient )
                break;
          }
@@ -1741,6 +1763,7 @@ int main(int argc, char **argv)
    commandlineInput.printDebug = 0;
    commandlineInput.enableAutoTune = 1;
    commandlineInput.miningVersion = 1;
+   commandlineInput.donationPercentage = 2.0;
 
    // parse command lines
    jhMiner_parseCommandline(argc, argv);
@@ -1777,7 +1800,8 @@ int main(int argc, char **argv)
    // print header
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
-   printf("\xBA  jhPrimeMiner - Mod by rdebourbon -v4.0G beta                 \xBA\n");
+   printf("\xBA  jhPrimeMiner - Mod by rdebourbon                             \xBA\n");
+   printf("\xBA  Version: %-50s  \xBA\n", minerVersionString);
    printf("\xBA                                                               \xBA\n");
    printf("\xBA  Original Author: JH (http://ypool.net)                       \xBA\n");
    printf("\xBA  Credits: Sunny King for the original Primecoin client&miner  \xBA\n");
@@ -1878,7 +1902,7 @@ int main(int argc, char **argv)
          // repeat connect & login until it is successful (with 30 seconds delay)
          while ( true )
          {
-            workData.xptClient = xptClient_connect(&jsonRequestTarget, commandlineInput.numThreads);
+            workData.xptClient = xptClient_connect(&jsonRequestTarget, commandlineInput.numThreads, commandlineInput.donationPercentage);
             if( workData.xptClient != NULL )
                break;
             printf("Failed to connect, retry in 30 seconds\n");

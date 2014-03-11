@@ -80,6 +80,23 @@ float xptPacketbuffer_readFloat(xptPacketbuffer_t* pb, bool* error)
 	return v;
 }
 
+/*
+ * Reads a single uint64 from the packet
+ * Returns 0 on error
+ */
+uint64 xptPacketbuffer_readU64(xptPacketbuffer_t* pb, bool* error)
+{
+	if( (pb->parserIndex+8) > pb->bufferSize )
+	{
+		pb->parserIndex = pb->bufferSize;
+		*error = true;
+		return 0;
+	}
+	uint64 v = *(uint64*)(pb->buffer+pb->parserIndex);
+	pb->parserIndex += 8;
+	*error = false;
+	return v;
+}
 
 /*
  * Reads a single uint32 from the packet
@@ -151,6 +168,38 @@ void xptPacketbuffer_readData(xptPacketbuffer_t* pb, uint8* data, uint32 length,
 	memcpy(data, (pb->buffer+pb->parserIndex), length);
 	pb->parserIndex += length;
 	*error = false;
+}
+
+/*
+ * Writes a single float to the packet
+ */
+void xptPacketbuffer_writeFloat(xptPacketbuffer_t* pb, bool* error, float v)
+{
+	if( (pb->parserIndex+4) > pb->bufferLimit )
+	{
+		*error = true;
+		return;
+	}
+	*(float*)(pb->buffer+pb->parserIndex) = v; 
+	pb->parserIndex += 4;
+	*error = false;
+	return;
+}
+
+/*
+ * Writes a single uint64 to the packet
+ */
+void xptPacketbuffer_writeU64(xptPacketbuffer_t* pb, bool* error, uint64 v)
+{
+	if( (pb->parserIndex+8) > pb->bufferLimit )
+	{
+		*error = true;
+		return;
+	}
+	*(uint64*)(pb->buffer+pb->parserIndex) = v; 
+	pb->parserIndex += 8;
+	*error = false;
+	return;
 }
 
 /*
@@ -244,7 +293,7 @@ void xptPacketbuffer_writeString(xptPacketbuffer_t* pb, char* stringData, uint32
 	}
 	maxStringLength--; // -1 since we count in the '\0' at the end
 	// get size of the string + length prefix
-	uint32 stringLength = (uint32)fStrLen(stringData);
+	uint32 stringLength = (uint32)strlen(stringData);
 	if( stringLength > maxStringLength )
 	{
 		printf("xptPacketbuffer_writeData(): String is longer than maxStringLength\n");

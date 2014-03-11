@@ -169,7 +169,9 @@ typedef struct
 
 extern primeStats_t primeStats;
 extern bool bSoloMining;
-
+extern char* minerVersionString;
+extern char* developerWallet;
+extern char developerPubKeyRipeHash[];
 
 typedef struct  
 {

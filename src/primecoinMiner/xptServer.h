@@ -84,7 +84,8 @@ typedef struct
 #define XPT_OPC_S_WORKDATA1		3
 #define XPT_OPC_C_SUBMIT_SHARE	4
 #define XPT_OPC_S_SHARE_ACK		5
-
+//#define XPT_OPC_C_SUBMIT_POW	6
+#define XPT_OPC_S_MESSAGE		7
 #define XPT_OPC_C_PING			8
 #define XPT_OPC_S_PING			8
 
@@ -95,6 +96,16 @@ typedef struct
 #define XPT_ERROR_INVALID_LOGIN		(1)
 #define XPT_ERROR_INVALID_WORKLOAD	(2)
 #define XPT_ERROR_INVALID_COINTYPE	(3)
+
+// algorithms
+
+#define ALGORITHM_SHA256		1
+#define ALGORITHM_SCRYPT		2
+#define ALGORITHM_PRIME			3
+#define ALGORITHM_PROTOSHARES	4
+#define ALGORITHM_METISCOIN		5
+#define ALGORITHM_MAXCOIN		6
+#define ALGORITHM_RIECOIN		7
 
 // xpt general
 xptServer_t* xptServer_create(uint16 port);
@@ -115,12 +126,15 @@ void xptPacketbuffer_changeSizeLimit(xptPacketbuffer_t* pb, uint32 sizeLimit);
 void xptPacketbuffer_beginReadPacket(xptPacketbuffer_t* pb);
 uint32 xptPacketbuffer_getReadSize(xptPacketbuffer_t* pb);
 float xptPacketbuffer_readFloat(xptPacketbuffer_t* pb, bool* error);
+uint64 xptPacketbuffer_readU64(xptPacketbuffer_t* pb, bool* error);
 uint32 xptPacketbuffer_readU32(xptPacketbuffer_t* pb, bool* error);
 uint16 xptPacketbuffer_readU16(xptPacketbuffer_t* pb, bool* error);
 uint8 xptPacketbuffer_readU8(xptPacketbuffer_t* pb, bool* error);
 void xptPacketbuffer_readData(xptPacketbuffer_t* pb, uint8* data, uint32 length, bool* error);
 
 void xptPacketbuffer_beginWritePacket(xptPacketbuffer_t* pb, uint8 opcode);
+void xptPacketbuffer_writeFloat(xptPacketbuffer_t* pb, bool* error, float v);
+void xptPacketbuffer_writeU64(xptPacketbuffer_t* pb, bool* error, uint64 v);
 void xptPacketbuffer_writeU32(xptPacketbuffer_t* pb, bool* error, uint32 v);
 void xptPacketbuffer_writeU16(xptPacketbuffer_t* pb, bool* error, uint16 v);
 void xptPacketbuffer_writeU8(xptPacketbuffer_t* pb, bool* error, uint8 v);

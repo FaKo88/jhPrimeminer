@@ -1,3 +1,5 @@
+#define XPT_DEVELOPER_FEE_MAX_ENTRIES	(8)
+
 typedef struct  
 {
 	uint8 merkleRoot[32];
@@ -14,6 +16,12 @@ typedef struct
 	uint8 chainMultiplierSize;
 	uint8 chainMultiplier[201];
 }xptShareToSubmit_t;
+
+typedef struct  
+{
+	uint16 devFee;
+	uint8  pubKeyHash[20]; // RIPEMD160 hash of public key (retrieved from wallet address without prefix byte and without checksum)
+}xptDevFeeEntry_t;
 
 typedef struct  
 {
@@ -50,11 +58,16 @@ typedef struct
   pthread_mutex_t cs_shareSubmit;
 #endif
 	simpleList_t* list_shareSubmitQueue;
+	// developer fee
+	xptDevFeeEntry_t developerFeeEntry[XPT_DEVELOPER_FEE_MAX_ENTRIES];
+	sint32 developerFeeCount; // number of developer fee entries
 }xptClient_t;
 
-xptClient_t* xptClient_connect(jsonRequestTarget_t* target, uint32 payloadNum);
+xptClient_t* xptClient_connect(jsonRequestTarget_t* target, uint32 payloadNum, double donationAmount);
+void xptClient_addDeveloperFeeEntry(xptClient_t* xptClient, char* walletAddress, uint16 integerFee);
 void xptClient_free(xptClient_t* xptClient);
 
+// connection processing
 bool xptClient_process(xptClient_t* xptClient); // needs to be called in a loop
 bool xptClient_isDisconnected(xptClient_t* xptClient, char** reason);
 bool xptClient_isAuthenticated(xptClient_t* xptClient);
@@ -68,7 +81,12 @@ void xptClient_sendWorkerLogin(xptClient_t* xptClient);
 bool xptClient_processPacket_authResponse(xptClient_t* xptClient);
 bool xptClient_processPacket_blockData1(xptClient_t* xptClient);
 bool xptClient_processPacket_shareAck(xptClient_t* xptClient);
-bool xptClient_processPacket_client2ServerPing(xptClient_t* xptClient);
+bool xptClient_processPacket_message(xptClient_t* xptClient);
+bool xptClient_processPacket_ping(xptClient_t* xptClient);
 
 
+// miner version string (needs to be defined somewhere in the project, max 45 characters)
 extern char* minerVersionString;
+
+// Developer Wallet Address
+extern char* developerWallet;
