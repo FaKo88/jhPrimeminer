@@ -60,6 +60,7 @@ typedef struct
    // getblocktemplate stuff
    char* xpmAddress; // we will use this XPM address for block payout
    double donationPercentage;
+   bool testNet;
 }commandlineInput_t;
 
 commandlineInput_t commandlineInput = {0};
@@ -941,6 +942,7 @@ void jhMiner_printHelp()
    puts("   -f <num>                      Set developer donation percentage. Range from 0.0 - 10.0%");
    puts("                                     Default is 2.0%");
    puts("   -tune <flag>                  Set a flag to control the auto tune functions");
+   puts("   -testnet                      Set a flag to indicate that the miner should use testnet parameters internally.");
    puts("   -xpm <wallet address>         When doing solo mining this is the address your mined XPM will be transfered to.");
    puts("Example usage:");
    puts("   jhPrimeminer.exe -o http://www.ypool.net:10034 -u workername.1 -p workerpass");
@@ -1151,6 +1153,11 @@ void jhMiner_parseCommandline(int argc, char **argv)
             ExitProcess(0);
          }
          cIdx++;
+      }
+      else if( memcmp(argument, "-testnet", 8)==0 )
+      {
+         // -testnet
+         commandlineInput.testNet = true;
       }
       else if( memcmp(argument, "-debug", 6)==0 )
       {
@@ -1764,6 +1771,7 @@ int main(int argc, char **argv)
    commandlineInput.enableAutoTune = 1;
    commandlineInput.miningVersion = 1;
    commandlineInput.donationPercentage = 2.0;
+   commandlineInput.testNet = false;
 
    // parse command lines
    jhMiner_parseCommandline(argc, argv);
@@ -1782,6 +1790,13 @@ int main(int argc, char **argv)
    // if set, validate xpm address
    if( commandlineInput.xpmAddress )
    {
+      // Check for testNet address and force testNet mode.
+      if (commandlineInput.xpmAddress[0] == 'm') 
+      {
+         commandlineInput.testNet = true;
+      }
+
+      // Validate address.
       DecodeBase58(commandlineInput.xpmAddress, decodedWalletAddress, &decodedWalletAddressLen);
       sha256_context ctx;
       uint8 addressValidationHash[32];
@@ -1797,6 +1812,16 @@ int main(int argc, char **argv)
          exit(-2);
       }
    }
+
+   // Set testnet params
+   if (commandlineInput.testNet)
+   {
+      // Set RdB TestNet params
+      developerWallet = "mnZDQvS4syU8YQoKRt9xcFFq27shXgNaXV";
+      char tempHash[20] = {77,54,85,39,9,28,211,175,133,197,249,28,226,38,25,17,64,146,44,30}; 
+      memcpy(developerPubKeyRipeHash, tempHash, sizeof(developerPubKeyRipeHash));
+   }
+
    // print header
    printf("\n");
    printf("\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n");
