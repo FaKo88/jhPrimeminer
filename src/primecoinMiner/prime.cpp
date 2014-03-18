@@ -913,8 +913,10 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
       lSieveBTTarget = lSieveTarget;
    }
 
-   //mpzHash.set_str("b5a9a5282286e14ab043c57d9dcedbfcc58d3f4ca959495d0346a719509357c2", 16);
-   //mpzFixedMultiplier.set_str("eabf889075749e389f3d41c03b3baa63d5aecc044b",16);
+#ifdef DEBUG_SIEVE
+   mpzHash.set_str("b5a9a5282286e14ab043c57d9dcedbfcc58d3f4ca959495d0346a719509357c2", 16);
+   mpzFixedMultiplier.set_str("eabf889075749e389f3d41c03b3baa63d5aecc044b",16);
+#endif
 
    if (psieve == NULL)
    {
@@ -949,11 +951,8 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
 
    unsigned int nTriedMultiplier = 0;
    unsigned int nLayerMultiplier = 0;
-
-   bool multipleShare = false;
-   mpz_class mpzPrevPrimeChainMultiplier = 0;
-
    bool rtnValue = false;
+   bool multipleShare = false;
 
    while (block->serverData.blockHeight == jhMiner_getCurrentWorkBlockHeight(block->threadIndex))
    {
@@ -964,19 +963,30 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
          break;
       }
 
+#ifdef DEBUG_SIEVE
+      std::ofstream sieveLog;
+      sieveLog.open("SieveDebug.log", std::ios::out | std::ios::app);
+      if (sieveLog.is_open())
+      {
+         sieveLog << "C" << "\t" << nTriedMultiplier << "\t" << nLayerMultiplier << "\t" << nCandidateType << std::endl;
+         sieveLog.close();
+      }
+#endif
       mpzChainOrigin = mpzHash * mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier);		
       nChainLength = 0;		
       unsigned char lCC1Composite, lCC2Composite;
       ProbablePrimeChainTestFast(mpzChainOrigin, testParams, lCC1Composite, lCC2Composite);
       nProbableChainLength = nChainLength;
 
-      unsigned int rbdTemp = GetChainDifficulty(nProbableChainLength);
+      // Feedback the origin prime test result for optimising next layer.
+      psieve->UpdateLastCandidatePrimality(lCC1Composite, lCC2Composite);
 
       if (nProbableChainLength >= nBitsForStats) 
       {
          if( nProbableChainLength > primeStats.bestPrimeChainDifficulty )
             primeStats.bestPrimeChainDifficulty = nProbableChainLength;
 
+         // Write to Foundshares
          std::ofstream shareLog;
          shareLog.open("FoundShares.log", std::ios::out | std::ios::app);
          if (shareLog.is_open())
@@ -985,101 +995,64 @@ bool MineProbablePrimeChain(CSieveOfEratosthenes*& psieve, primecoinBlock_t* blo
             shareLog.close();
          }
 
-         int minLengthMultiplier,maxLengthMultiplier,chainLengthModifier;
-         minLengthMultiplier = maxLengthMultiplier= 0;
-         chainLengthModifier = (nCandidateType == PRIME_CHAIN_BI_TWIN) ? 2 : 1;
-         //// Check for a chain greater than min chain length that we can maximise share count from.
-         //if (nProbableChainLength >= (nBitsForStats + (chainLengthModifier << 24)))
-         //{
-         //   // Calculate how many lesser value shares we can glean
-         //   maxLengthMultiplier = (nProbableChainLength >> 24) - (nBitsForStats >> 24);
-         //   if ((nProbableChainLength - (maxLengthMultiplier << 24)) < nBitsForStats) maxLengthMultiplier--;
-         //   maxLengthMultiplier /= chainLengthModifier; // factor down by chain length modifier
-         //   if (nProbableChainLength >= block->serverData.nBitsForShare)
-         //   {
-         //      // This is a block solving share - make sure we extract max share value.
-         //      minLengthMultiplier = 1;
-         //      while (block->nBits < (nProbableChainLength - ((minLengthMultiplier * chainLengthModifier) << 24)))
-         //      {
-         //         minLengthMultiplier++;
-         //      }
-         //   }
-         //}
+         // update block data
+         block->serverData.client_shareBits = nProbableChainLength;
+         block->mpzPrimeChainMultiplier = (mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier));
 
-         for (int i = maxLengthMultiplier; i >= 0; i--)
+         // Update chain counters
+         primeStats.chainCounter[0][min((block->serverData.client_shareBits >> 24),12)]++;
+         primeStats.chainCounter[nCandidateType][min((block->serverData.client_shareBits >> 24),12)]++;
+         primeStats.nChainHit++;
+
+#ifdef DEBUG_SIEVE
+         printf("%s - CHAIN FOUND! - (TH:SE:PG:%2u:%2u:%2u) - DIFF:%8.04f - TYPE:%u\n", sNow, threadIndex, nLayerMultiplier, nTriedMultiplier/nMaxSieveSize, shareDiff, nCandidateType);
+         printf("HashNum        : %s\n", mpzHash.get_str(16).c_str());
+         printf("FixedMultiplier: %s\n", mpzFixedMultiplier.get_str(16).c_str());
+         printf("HashMultiplier : %u\n", nTriedMultiplier);
+#endif
+         if  (block->serverData.client_shareBits >= block->serverData.nBitsForShare)
          {
-            // Check if this share must be skipped as it solves block prematurely.
-            if ((i > 0) && (i < minLengthMultiplier)) continue; 
 
-            // update block data
-            block->serverData.client_shareBits = nProbableChainLength - ((i * chainLengthModifier) << 24);
-            block->mpzPrimeChainMultiplier = (mpzFixedMultiplier * nTriedMultiplier * ((uint64)1UL << nLayerMultiplier)) * (1 << i);
+            // attempt to prevent duplicate share submissions.
+            if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
+               continue;
 
-            // Update chain counters
-            primeStats.chainCounter[0][min((block->serverData.client_shareBits >> 24),12)]++;
-            primeStats.chainCounter[nCandidateType][min((block->serverData.client_shareBits >> 24),12)]++;
-            primeStats.nChainHit++;
-
-
-            //if (nPrintDebugMessages)
-            //{
-            //   printf("%s - CHAIN FOUND! - (TH:SE:PG:%2u:%2u:%2u) - DIFF:%8.04f - TYPE:%u\n", sNow, threadIndex, nLayerMultiplier, nTriedMultiplier/nMaxSieveSize, shareDiff, nCandidateType);
-            //   printf("HashNum        : %s\n", mpzHash.get_str(16).c_str());
-            //   printf("FixedMultiplier: %s\n", mpzFixedMultiplier.get_str(16).c_str());
-            //   printf("HashMultiplier : %u\n", nTriedMultiplier);
-            //}
-
-            if  (block->serverData.client_shareBits >= block->serverData.nBitsForShare)
+            // generate block raw data
+            uint8 blockRawData[256] = {0};
+            memcpy(blockRawData, block, 80);
+            uint32 writeIndex = 80;
+            sint32 lengthBN = 0;
+            CBigNum bnPrimeChainMultiplier;
+            bnPrimeChainMultiplier.SetHex(block->mpzPrimeChainMultiplier.get_str(16));
+            std::vector<unsigned char> bnSerializeData = bnPrimeChainMultiplier.getvch();
+            lengthBN = bnSerializeData.size();
+            *(uint8*)(blockRawData+writeIndex) = (uint8)lengthBN; // varInt (we assume it always has a size low enough for 1 byte)
+            writeIndex += 1;
+            memcpy(blockRawData+writeIndex, &bnSerializeData[0], lengthBN);
+            writeIndex += lengthBN;	
+            // switch endianness
+            for(uint32 f=0; f<256/4; f++)
             {
-
-               // attempt to prevent duplicate share submissions.
-               if (multipleShare && multiplierSet.find(block->mpzPrimeChainMultiplier) != multiplierSet.end())
-                  continue;
-
-               // generate block raw data
-               uint8 blockRawData[256] = {0};
-               memcpy(blockRawData, block, 80);
-               uint32 writeIndex = 80;
-               sint32 lengthBN = 0;
-               CBigNum bnPrimeChainMultiplier;
-               bnPrimeChainMultiplier.SetHex(block->mpzPrimeChainMultiplier.get_str(16));
-               std::vector<unsigned char> bnSerializeData = bnPrimeChainMultiplier.getvch();
-               lengthBN = bnSerializeData.size();
-               *(uint8*)(blockRawData+writeIndex) = (uint8)lengthBN; // varInt (we assume it always has a size low enough for 1 byte)
-               writeIndex += 1;
-               memcpy(blockRawData+writeIndex, &bnSerializeData[0], lengthBN);
-               writeIndex += lengthBN;	
-               // switch endianness
-               for(uint32 f=0; f<256/4; f++)
-               {
-                  *(uint32*)(blockRawData+f*4) = _swapEndianessU32(*(uint32*)(blockRawData+f*4));
-               }
-
-               time_t now = time(0);
-               struct tm * timeinfo;
-               timeinfo = localtime (&now);
-               char sNow [80];
-               strftime (sNow, 80, "%x-%X",timeinfo);
-               float shareDiff = GetChainDifficulty(block->serverData.client_shareBits);
-
-               printf("%s - CHAIN FOUND! - (Th#:%2u) - DIFF:%8.05f - TYPE:%u\n", sNow, threadIndex, shareDiff, nCandidateType);
-
-               // submit this share
-               multiplierSet.insert(block->mpzPrimeChainMultiplier);
-               multipleShare = true;
-               jhMiner_pushShare_primecoin(blockRawData, block);
-               primeStats.foundShareCount ++;
-               RtlZeroMemory(blockRawData, 256);
-               psieve->nMaxWeaveMultiplier++;
+               *(uint32*)(blockRawData+f*4) = _swapEndianessU32(*(uint32*)(blockRawData+f*4));
             }
+
+            time_t now = time(0);
+            struct tm * timeinfo;
+            timeinfo = localtime (&now);
+            char sNow [80];
+            strftime (sNow, 80, "%x-%X",timeinfo);
+            float shareDiff = GetChainDifficulty(block->serverData.client_shareBits);
+
+            printf("%s - CHAIN FOUND! - (Th#:%2u) - DIFF:%8.05f - TYPE:%u\n", sNow, threadIndex, shareDiff, nCandidateType);
+
+            // submit this share
+            multiplierSet.insert(block->mpzPrimeChainMultiplier);
+            multipleShare = true;
+            jhMiner_pushShare_primecoin(blockRawData, block);
+            primeStats.foundShareCount ++;
+            RtlZeroMemory(blockRawData, 256);
+            psieve->nMaxWeaveMultiplier++;
          }
-      }
-      else
-      {
-         // Feedback the origin prime test result for optimising next layer.
-         // Strictly speaking this should always be called, but in order to maximise shares
-         // We only call if a share was not found.
-         psieve->UpdateLastCandidatePrimality(lCC1Composite, lCC2Composite);
       }
    }
    return rtnValue; // stop as timed out

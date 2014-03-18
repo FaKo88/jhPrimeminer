@@ -1437,7 +1437,7 @@ void AutoTuneSieveParameters(const double lastBlockPassedTime, const uint32 last
          {
             if (primeStats.nBestNumbersTestedPerSecond > 0) printf("New Best results recorded! - ");
             primeStats.nBestNumbersTestedPerSecond = lastBlockNumsPerSecond;
-            primeStats.nBestPrimorialMultiplier = primeStats.nPrimorialMultiplier;
+            //primeStats.nBestPrimorialMultiplier = primeStats.nPrimorialMultiplier;
             primeStats.nBestPrimeCount = nMaxPrimes;
             primeStats.nBestSieveSize = nMaxSieveSize;
          }
@@ -1493,7 +1493,7 @@ void AutoTuneSieveParameters(const double lastBlockPassedTime, const uint32 last
          {
             primeStats.nLastNumbersTestedPerSecond = 0;
             primeStats.nBestNumbersTestedPerSecond = 0; // Debateable
-            primeStats.nPrimorialMultiplier = primeStats.nBestPrimorialMultiplier;
+            //primeStats.nPrimorialMultiplier = primeStats.nBestPrimorialMultiplier;
             nMaxPrimes = primeStats.nBestPrimeCount;
             nMaxSieveSize = primeStats.nBestSieveSize;
             printf("Resetting to previous best. Sieve Size: %u - Prime Count: %u", nMaxSieveSize, nMaxPrimes);

@@ -153,7 +153,7 @@ typedef struct
 
    volatile uint32 nBestNumbersTestedPerSecond;
    volatile uint32 nLastNumbersTestedPerSecond;
-   volatile unsigned int nBestPrimorialMultiplier;
+   //volatile unsigned int nBestPrimorialMultiplier;
    volatile unsigned int nBestPrimeCount;
    volatile unsigned int nBestSieveSize;
    volatile unsigned int nPrimesAdjustmentAmount;

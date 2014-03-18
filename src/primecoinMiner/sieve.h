@@ -47,6 +47,7 @@ class CSieveOfEratosthenes
    unsigned int nCandidatesBytes;
    unsigned int nCandidateMultiplier; // current candidate for power test
    int nCandidateLayer;
+   int nMaxCandidateLayer;
 
    // final set of candidates for probable primality checking
    std::vector<sieve_word_t> vfCandidates;
